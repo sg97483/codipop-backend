@@ -1,11 +1,11 @@
  // server.js (최종 수정 버전)
 
- import express from 'express';
- import multer from 'multer';
- import { GoogleGenerativeAI } from '@google/generative-ai';
- import { Storage } from '@google-cloud/storage';
- import path from 'path';
- import { firestore } from './firebase-admin.js';
+ const express = require('express');
+ const multer = require('multer');
+ const { GoogleGenerativeAI } = require('@google/generative-ai');
+ const { Storage } = require('@google-cloud/storage');
+ const path = require('path');
+ const { firestore } = require('./firebase-admin.js');
  
  // --- 설정 ---
  const app = express();
@@ -25,6 +25,7 @@
  
  const upload = multer({ storage: multer.memoryStorage() });
  
+ app.use(express.json());
  // --- API 엔드포인트 ---
  app.post('/try-on', upload.fields([{ name: 'person' }, { name: 'clothing' }]), async (req, res) => {
    console.log('이미지 처리 요청 받음 (gemini-2.5-flash-image-preview 사용)...');
@@ -87,5 +88,5 @@
  
  
  app.listen(port, () => {
-   console.log(`CodiPOP 백엔드 서버가 http://localhost:${port} 에서 실행 중입니다.`);
+  console.log(`CodiPOP 백엔드 서버가 http://localhost:${port} 에서 실행 중입니다.`);
  });
