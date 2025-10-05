@@ -2,8 +2,8 @@
 
 const admin = require('firebase-admin');
 
-// ✅ serviceAccountKey.json 파일을 직접 읽는 대신, 환경 변수에서 읽어옵니다.
-const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+// ✅ Secret File의 경로에서 직접 파일을 읽어옵니다.
+const serviceAccount = require('/etc/secrets/serviceAccountKey.json');
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
