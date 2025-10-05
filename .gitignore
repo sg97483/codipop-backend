@@ -1,0 +1,12 @@
+# Node
+node_modules/
+yarn-error.log
+npm-debug.log
+
+# Env and secrets
+.env
+.env.*
+serviceAccountKey.json
+
+# OS
+.DS_Store
