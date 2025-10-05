@@ -1,13 +1,14 @@
 // firebase-admin.js
 
 const admin = require('firebase-admin');
-const serviceAccount = require('./serviceAccountKey.json'); // ✅ CommonJS 방식으로 JSON 파일 불러오기
+
+// ✅ serviceAccountKey.json 파일을 직접 읽는 대신, 환경 변수에서 읽어옵니다.
+const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
-// firestore 인스턴스를 초기화하고 export 합니다.
 const firestore = admin.firestore();
 
-module.exports = { firestore }; // ✅ CommonJS 방식으로 export
+module.exports = { firestore };
