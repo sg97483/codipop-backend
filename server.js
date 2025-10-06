@@ -1,15 +1,27 @@
  // server.js (최종 수정 버전)
 
- const express = require('express');
- const multer = require('multer');
- const { GoogleGenerativeAI } = require('@google/generative-ai');
- const { Storage } = require('@google-cloud/storage');
- const path = require('path');
- const { firestore } = require('./firebase-admin.js');
- 
- // --- 설정 ---
- const app = express();
- const port = 3000;
+const express = require('express');
+const multer = require('multer');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { Storage } = require('@google-cloud/storage');
+const path = require('path');
+const { firestore } = require('./firebase-admin.js');
+
+// --- 설정 ---
+const app = express();
+const port = process.env.PORT || 3000;
+
+// CORS 설정 (클라이언트 접근 허용)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
  
  // Google AI 설정
  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -25,8 +37,18 @@
  
  const upload = multer({ storage: multer.memoryStorage() });
  
- app.use(express.json());
- // --- API 엔드포인트 ---
+app.use(express.json());
+
+// 기본 라우트 (서버 상태 확인용)
+app.get('/', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'CodiPOP Backend Server is running!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// --- API 엔드포인트 ---
  app.post('/try-on', upload.fields([{ name: 'person' }, { name: 'clothing' }]), async (req, res) => {
    console.log('이미지 처리 요청 받음 (gemini-2.5-flash-image-preview 사용)...');
  
@@ -84,9 +106,50 @@
      console.error('서버 에러:', error);
      res.status(500).json({ success: false, message: '이미지 처리 중 서버 내부 오류가 발생했습니다.' });
    }
- });
- 
- 
- app.listen(port, () => {
-  console.log(`CodiPOP 백엔드 서버가 http://localhost:${port} 에서 실행 중입니다.`);
- });
+});
+
+// 코디 추천 엔드포인트
+app.post('/get-recommendation', async (req, res) => {
+  console.log('코디 추천 요청 받음...');
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ success: false, message: '사용자 ID가 필요합니다.' });
+  }
+
+  try {
+    // Firestore에서 사용자 옷장 데이터 조회
+    const closetSnapshot = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('closet')
+      .orderBy('createdAt', 'desc')
+      .limit(5)
+      .get();
+
+    if (closetSnapshot.empty) {
+      return res.json({ success: true, recommendation: "옷장에 아이템을 먼저 추가해주세요!" });
+    }
+    
+    const prompt = `
+      한 패션 전문 AI 스타일리스트로서, 사용자의 옷장 아이템을 기반으로 오늘 날씨(서울, 맑음, 22도, 가을)에 어울리는 코디를 제안해줘.
+      사용자의 옷장에는 주로 '베이지색 니트', '청바지', '블라우스' 같은 아이템이 있어.
+      캐주얼하면서도 세련된 스타일로 추천해줘.
+    `;
+    
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const recommendationText = response.text();
+
+    console.log('Gemini 코디 추천:', recommendationText);
+    res.json({ success: true, recommendation: recommendationText });
+
+  } catch (error) {
+    console.error('추천 생성 중 에러:', error);
+    res.status(500).json({ success: false, message: '추천을 생성하는 중 오류가 발생했습니다.' });
+  }
+});
+
+app.listen(port, () => {
+ console.log(`CodiPOP 백엔드 서버가 http://localhost:${port} 에서 실행 중입니다.`);
+});
