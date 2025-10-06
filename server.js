@@ -28,12 +28,22 @@ app.use((req, res, next) => {
  // ✅ [수정] 모델 이름을 스크린샷에 나온 정확한 ID로 변경
  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image-preview' });
  
- // Firebase Storage 설정
- const storage = new Storage({
-   keyFilename: path.join(process.cwd(), 'serviceAccountKey.json'),
-   projectId: 'codipop-63c0d',
- });
- const bucket = storage.bucket('codipop-63c0d.firebasestorage.app');
+// Firebase Storage 설정 (환경 변수 사용)
+let storage;
+if (process.env.GOOGLE_CREDENTIALS) {
+  const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  storage = new Storage({
+    credentials: serviceAccount,
+    projectId: 'codipop-63c0d',
+  });
+} else {
+  // 로컬 개발용
+  storage = new Storage({
+    keyFilename: path.join(process.cwd(), 'serviceAccountKey.json'),
+    projectId: 'codipop-63c0d',
+  });
+}
+const bucket = storage.bucket('codipop-63c0d.firebasestorage.app');
  
  const upload = multer({ storage: multer.memoryStorage() });
  
