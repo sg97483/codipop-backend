@@ -78,15 +78,33 @@ app.get('/', (req, res) => {
      
      console.log('Gemini 응답:', JSON.stringify(response, null, 2));
  
-     const firstPart = response?.candidates?.[0]?.content?.parts?.[0];
- 
-     if (!firstPart || !firstPart.inlineData) {
-       const errorMessage = firstPart?.text || 'Gemini API did not return an image. Please check the prompt or input images.';
-       console.error('Gemini 응답 에러:', errorMessage);
-       return res.status(500).json({ success: false, message: errorMessage });
-     }
-     
-     const generatedImageBase64 = firstPart.inlineData.data;
+    // Gemini 응답에서 이미지 데이터 추출
+    const candidates = response?.candidates;
+    if (!candidates || candidates.length === 0) {
+      console.error('Gemini 응답에 candidates가 없습니다.');
+      return res.status(500).json({ success: false, message: 'Gemini API가 응답을 생성하지 못했습니다.' });
+    }
+
+    const content = candidates[0]?.content;
+    if (!content || !content.parts || content.parts.length === 0) {
+      console.error('Gemini 응답에 content.parts가 없습니다.');
+      return res.status(500).json({ success: false, message: 'Gemini API가 이미지를 생성하지 못했습니다.' });
+    }
+
+    // 이미지 데이터 찾기
+    let generatedImageBase64 = null;
+    for (const part of content.parts) {
+      if (part.inlineData && part.inlineData.data) {
+        generatedImageBase64 = part.inlineData.data;
+        break;
+      }
+    }
+
+    if (!generatedImageBase64) {
+      console.error('Gemini 응답에서 이미지 데이터를 찾을 수 없습니다.');
+      console.error('응답 구조:', JSON.stringify(content.parts, null, 2));
+      return res.status(500).json({ success: false, message: '생성된 이미지를 찾을 수 없습니다.' });
+    }
      const generatedImageBuffer = Buffer.from(generatedImageBase64, 'base64');
      
      const fileName = `results/${Date.now()}_result.jpeg`;
