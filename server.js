@@ -25,8 +25,12 @@ app.use((req, res, next) => {
  
  // Google AI 설정
  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
- // ✅ [수정] 모델 이름을 스크린샷에 나온 정확한 ID로 변경
- const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image-preview' });
+ 
+ // 1. 이미지 생성용 모델 (이미지 합성에 최적화)
+ const imageModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
+ 
+ // 2. 텍스트 생성용 모델 (더 저렴하고 빠름)
+ const textModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
  
 // Firebase Storage 설정 (환경 변수 사용)
 let storage;
@@ -60,7 +64,7 @@ app.get('/', (req, res) => {
 
 // --- API 엔드포인트 ---
  app.post('/try-on', upload.fields([{ name: 'person' }, { name: 'clothing' }]), async (req, res) => {
-   console.log('이미지 처리 요청 받음 (gemini-2.5-flash-image-preview 사용)...');
+   console.log('이미지 처리 요청 받음 (gemini-2.5-flash-image 사용)...');
  
    try {
      if (!req.files.person || !req.files.clothing) {
@@ -83,7 +87,7 @@ app.get('/', (req, res) => {
        The output must be only the resulting image.
      `;
  
-    const result = await model.generateContent([prompt, ...imageParts]);
+    const result = await imageModel.generateContent([prompt, ...imageParts]);
     const response = result.response;
     
     // 토큰 사용량 로그 추가
@@ -148,7 +152,7 @@ app.get('/', (req, res) => {
 
 // 코디 추천 엔드포인트
 app.post('/get-recommendation', async (req, res) => {
-  console.log('코디 추천 요청 받음...');
+  console.log('코디 추천 요청 받음 (gemini-1.5-flash-latest 사용)...');
   const { userId } = req.body;
 
   if (!userId) {
@@ -175,7 +179,7 @@ app.post('/get-recommendation', async (req, res) => {
       캐주얼하면서도 세련된 스타일로 추천해줘.
     `;
     
-    const result = await model.generateContent(prompt);
+    const result = await textModel.generateContent(prompt);
     const response = await result.response;
     const recommendationText = response.text();
 
