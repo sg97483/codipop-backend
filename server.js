@@ -83,10 +83,20 @@ app.get('/', (req, res) => {
        The output must be only the resulting image.
      `;
  
-     const result = await model.generateContent([prompt, ...imageParts]);
-     const response = result.response;
-     
-     console.log('Gemini 응답:', JSON.stringify(response, null, 2));
+    const result = await model.generateContent([prompt, ...imageParts]);
+    const response = result.response;
+    
+    // 토큰 사용량 로그 추가
+    if (result.response && result.response.usageMetadata) {
+      const usage = result.response.usageMetadata;
+      console.log('이미지 합성 토큰 사용량:', {
+        promptTokenCount: usage.promptTokenCount,
+        candidatesTokenCount: usage.candidatesTokenCount,
+        totalTokenCount: usage.totalTokenCount
+      });
+    }
+    
+    console.log('Gemini 응답:', JSON.stringify(response, null, 2));
  
     // Gemini 응답에서 이미지 데이터 추출
     const candidates = response?.candidates;
