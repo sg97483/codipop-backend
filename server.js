@@ -49,7 +49,13 @@ if (process.env.GOOGLE_CREDENTIALS) {
 }
 const bucket = storage.bucket('codipop-63c0d.firebasestorage.app');
  
- const upload = multer({ storage: multer.memoryStorage() });
+ const upload = multer({ 
+   storage: multer.memoryStorage(),
+   fileFilter: (req, file, cb) => {
+     // 모든 파일 허용
+     cb(null, true);
+   }
+ });
  
 app.use(express.json());
 
@@ -63,42 +69,30 @@ app.get('/', (req, res) => {
 });
 
 // --- API 엔드포인트 ---
- app.post('/try-on', upload.fields([
-   { name: 'person', maxCount: 1 },
-   { name: 'clothing_0', maxCount: 1 },
-   { name: 'clothing_1', maxCount: 1 },
-   { name: 'clothing_2', maxCount: 1 },
-   { name: 'clothing_3', maxCount: 1 },
-   { name: 'clothing_4', maxCount: 1 }
- ]), async (req, res) => {
+ app.post('/try-on', upload.any(), async (req, res) => {
    console.log('이미지 처리 요청 받음 (gemini-2.5-flash-image 사용)...');
+   console.log('받은 파일 필드들:', Object.keys(req.files || {}));
 
    try {
-     if (!req.files.person) {
+     // req.files는 배열 형태로 들어옴
+     console.log('받은 파일들:', req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })));
+     
+     // person 이미지 찾기
+     const personFile = req.files.find(f => f.fieldname === 'person');
+     if (!personFile) {
        return res.status(400).json({ success: false, message: '사람 이미지가 필요합니다.' });
      }
-
-     const personFile = req.files.person[0];
      
-     // 여러 옷 이미지 수집 (최대 3개만 처리)
-     const clothingFiles = [];
-     for (let i = 0; i < 5; i++) {
-       const clothingFile = req.files[`clothing_${i}`]?.[0];
-       if (clothingFile) {
-         clothingFiles.push(clothingFile);
-       }
-     }
+     // 옷 이미지들 수집 (최대 3개만 처리)
+     const clothingFiles = req.files
+       .filter(f => f.fieldname.startsWith('clothing'))
+       .sort((a, b) => a.fieldname.localeCompare(b.fieldname))
+       .slice(0, 3); // 최대 3개만
      
-     // 최대 3개로 제한
-     if (clothingFiles.length > 3) {
-       console.log(`옷 이미지 ${clothingFiles.length}개 중 처음 3개만 처리합니다.`);
-       clothingFiles.splice(3);
-     }
-
      if (clothingFiles.length === 0) {
        return res.status(400).json({ success: false, message: '최소 1개 이상의 옷 이미지가 필요합니다.' });
      }
-
+     
      console.log(`처리할 옷 이미지 개수: ${clothingFiles.length}개`);
  
      // 이미지 파트 구성 (사람 이미지 + 여러 옷 이미지)
