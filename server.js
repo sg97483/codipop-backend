@@ -67,7 +67,9 @@ app.get('/', (req, res) => {
    { name: 'person', maxCount: 1 },
    { name: 'clothing_0', maxCount: 1 },
    { name: 'clothing_1', maxCount: 1 },
-   { name: 'clothing_2', maxCount: 1 }
+   { name: 'clothing_2', maxCount: 1 },
+   { name: 'clothing_3', maxCount: 1 },
+   { name: 'clothing_4', maxCount: 1 }
  ]), async (req, res) => {
    console.log('이미지 처리 요청 받음 (gemini-2.5-flash-image 사용)...');
 
@@ -78,13 +80,19 @@ app.get('/', (req, res) => {
 
      const personFile = req.files.person[0];
      
-     // 여러 옷 이미지 수집 (최대 3개)
+     // 여러 옷 이미지 수집 (최대 3개만 처리)
      const clothingFiles = [];
-     for (let i = 0; i < 3; i++) {
+     for (let i = 0; i < 5; i++) {
        const clothingFile = req.files[`clothing_${i}`]?.[0];
        if (clothingFile) {
          clothingFiles.push(clothingFile);
        }
+     }
+     
+     // 최대 3개로 제한
+     if (clothingFiles.length > 3) {
+       console.log(`옷 이미지 ${clothingFiles.length}개 중 처음 3개만 처리합니다.`);
+       clothingFiles.splice(3);
      }
 
      if (clothingFiles.length === 0) {
