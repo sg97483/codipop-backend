@@ -69,55 +69,42 @@ app.get('/', (req, res) => {
 });
 
 // --- API 엔드포인트 ---
- app.post('/try-on', upload.any(), async (req, res) => {
-   console.log('이미지 처리 요청 받음 (gemini-2.5-flash-image 사용)...');
-   console.log('받은 파일 필드들:', Object.keys(req.files || {}));
+app.post('/try-on', upload.any(), async (req, res) => {
+  console.log('이미지 처리 요청 받음 (다중 옷 이미지)...');
+  
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: '이미지 파일이 필요합니다.' });
+    }
+    
+    // 전송된 파일들 중에서 'person'과 'clothing'들을 구분합니다.
+    const personFile = req.files.find(file => file.fieldname === 'person');
+    const clothingFiles = req.files.filter(file => file.fieldname.startsWith('clothing'));
 
-   try {
-     // req.files는 배열 형태로 들어옴
-     console.log('받은 파일들:', req.files.map(f => ({ fieldname: f.fieldname, originalname: f.originalname })));
-     
-     // person 이미지 찾기
-     const personFile = req.files.find(f => f.fieldname === 'person');
-     if (!personFile) {
-       return res.status(400).json({ success: false, message: '사람 이미지가 필요합니다.' });
-     }
-     
-     // 옷 이미지들 수집 (최대 3개만 처리)
-     const clothingFiles = req.files
-       .filter(f => f.fieldname.startsWith('clothing'))
-       .sort((a, b) => a.fieldname.localeCompare(b.fieldname))
-       .slice(0, 3); // 최대 3개만
-     
-     if (clothingFiles.length === 0) {
-       return res.status(400).json({ success: false, message: '최소 1개 이상의 옷 이미지가 필요합니다.' });
-     }
-     
-     console.log(`처리할 옷 이미지 개수: ${clothingFiles.length}개`);
- 
-     // 이미지 파트 구성 (사람 이미지 + 여러 옷 이미지)
-     const imageParts = [
-       { inlineData: { data: personFile.buffer.toString('base64'), mimeType: personFile.mimetype } }
-     ];
-     
-     // 모든 옷 이미지 추가
-     clothingFiles.forEach((clothingFile, index) => {
-       imageParts.push({
-         inlineData: { 
-           data: clothingFile.buffer.toString('base64'), 
-           mimeType: clothingFile.mimetype 
-         }
-       });
-     });
+    if (!personFile || clothingFiles.length === 0) {
+      return res.status(400).json({ success: false, message: '사람과 옷 이미지가 모두 필요합니다.' });
+    }
 
-     const prompt = `
-       You are an expert virtual try-on AI.
-       Using the first image of the person and the following ${clothingFiles.length} clothing images, generate a new image where the person is wearing all the selected clothing items.
-       Combine all clothing items naturally and harmoniously.
-       Maintain the person's original face, hair, and body shape. The clothing should fit naturally.
-       Preserve the background of the first image.
-       The output must be only the resulting image.
-     `;
+    console.log(`처리할 이미지: 사람 1개, 옷 ${clothingFiles.length}개`);
+
+    // 이미지 파트 구성 (사람 이미지 + 여러 옷 이미지)
+    const imageParts = [
+      { inlineData: { data: personFile.buffer.toString('base64'), mimeType: personFile.mimetype } }
+    ];
+    clothingFiles.forEach(file => {
+      imageParts.push({
+        inlineData: { data: file.buffer.toString('base64'), mimeType: file.mimetype }
+      });
+    });
+
+    // 프롬프트도 여러 개의 옷을 처리하도록 수정
+    const prompt = `
+      You are an expert virtual try-on AI.
+      Using the first image of the person and the following ${clothingFiles.length} clothing images, generate a new image where the person is wearing all the clothing items together.
+      Combine all clothing items naturally. For example, if there is a top and pants, wear them together. If there is a hat, top, and pants, wear all three.
+      Maintain the person's original face, hair, and body shape.
+      The output must be only the resulting image.
+    `;
  
     const result = await imageModel.generateContent([prompt, ...imageParts]);
     const response = result.response;
