@@ -77,21 +77,30 @@ app.post('/try-on', upload.any(), async (req, res) => {
       return res.status(400).json({ success: false, message: '이미지 파일이 필요합니다.' });
     }
     
+    // 디버깅: 받은 모든 파일 정보 출력
+    console.log('받은 모든 파일들:');
+    req.files.forEach((file, index) => {
+      console.log(`  ${index + 1}. fieldname: "${file.fieldname}", originalname: "${file.originalname}", size: ${file.size} bytes`);
+    });
+    
     // 전송된 파일들 중에서 'person'과 'clothing'들을 구분합니다.
     const personFile = req.files.find(file => file.fieldname === 'person');
     const clothingFiles = req.files.filter(file => file.fieldname.startsWith('clothing'));
+    
+    // 만약 clothing으로 시작하는 파일이 없다면, person이 아닌 모든 파일을 옷으로 간주
+    const allClothingFiles = clothingFiles.length > 0 ? clothingFiles : req.files.filter(file => file.fieldname !== 'person');
 
-    if (!personFile || clothingFiles.length === 0) {
+    if (!personFile || allClothingFiles.length === 0) {
       return res.status(400).json({ success: false, message: '사람과 옷 이미지가 모두 필요합니다.' });
     }
 
-    console.log(`처리할 이미지: 사람 1개, 옷 ${clothingFiles.length}개`);
+    console.log(`처리할 이미지: 사람 1개, 옷 ${allClothingFiles.length}개`);
 
     // 이미지 파트 구성 (사람 이미지 + 여러 옷 이미지)
     const imageParts = [
       { inlineData: { data: personFile.buffer.toString('base64'), mimeType: personFile.mimetype } }
     ];
-    clothingFiles.forEach(file => {
+    allClothingFiles.forEach(file => {
       imageParts.push({
         inlineData: { data: file.buffer.toString('base64'), mimeType: file.mimetype }
       });
@@ -100,7 +109,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
     // 프롬프트도 여러 개의 옷을 처리하도록 수정
     const prompt = `
       You are an expert virtual try-on AI.
-      Using the first image of the person and the following ${clothingFiles.length} clothing images, generate a new image where the person is wearing all the clothing items together.
+      Using the first image of the person and the following ${allClothingFiles.length} clothing images, generate a new image where the person is wearing all the clothing items together.
       Combine all clothing items naturally. For example, if there is a top and pants, wear them together. If there is a hat, top, and pants, wear all three.
       Maintain the person's original face, hair, and body shape.
       The output must be only the resulting image.
@@ -114,8 +123,8 @@ app.post('/try-on', upload.any(), async (req, res) => {
       const usage = result.response.usageMetadata;
       console.log('이미지 합성 토큰 사용량:', {
         personImage: '1개',
-        clothingImages: `${clothingFiles.length}개`,
-        totalImages: `${clothingFiles.length + 1}개`,
+        clothingImages: `${allClothingFiles.length}개`,
+        totalImages: `${allClothingFiles.length + 1}개`,
         promptTokenCount: usage.promptTokenCount,
         candidatesTokenCount: usage.candidatesTokenCount,
         totalTokenCount: usage.totalTokenCount
