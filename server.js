@@ -70,7 +70,9 @@ app.get('/', (req, res) => {
 
 // --- API 엔드포인트 ---
 app.post('/try-on', upload.any(), async (req, res) => {
-  console.log('이미지 처리 요청 받음 (다중 옷 이미지)...');
+  const requestId = Date.now();
+  console.log(`[${requestId}] 이미지 처리 요청 받음 (다중 옷 이미지)...`);
+  console.log(`[${requestId}] 요청 헤더:`, JSON.stringify(req.headers, null, 2));
   
   try {
     if (!req.files || req.files.length === 0) {
@@ -78,9 +80,9 @@ app.post('/try-on', upload.any(), async (req, res) => {
     }
     
     // 디버깅: 받은 모든 파일 정보 출력
-    console.log('받은 모든 파일들:');
+    console.log(`[${requestId}] 받은 모든 파일들:`);
     req.files.forEach((file, index) => {
-      console.log(`  ${index + 1}. fieldname: "${file.fieldname}", originalname: "${file.originalname}", size: ${file.size} bytes`);
+      console.log(`[${requestId}]   ${index + 1}. fieldname: "${file.fieldname}", originalname: "${file.originalname}", size: ${file.size} bytes`);
     });
     
     // 전송된 파일들 중에서 'person'과 'clothing'들을 구분합니다.
@@ -94,7 +96,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
       return res.status(400).json({ success: false, message: '사람과 옷 이미지가 모두 필요합니다.' });
     }
 
-    console.log(`처리할 이미지: 사람 1개, 옷 ${allClothingFiles.length}개`);
+    console.log(`[${requestId}] 처리할 이미지: 사람 1개, 옷 ${allClothingFiles.length}개`);
 
     // 이미지 파트 구성 (사람 이미지 + 여러 옷 이미지)
     const imageParts = [
@@ -115,13 +117,15 @@ app.post('/try-on', upload.any(), async (req, res) => {
       The output must be only the resulting image.
     `;
  
+    console.log(`[${requestId}] Gemini API 호출 시작...`);
     const result = await imageModel.generateContent([prompt, ...imageParts]);
     const response = result.response;
+    console.log(`[${requestId}] Gemini API 호출 완료`);
     
     // 토큰 사용량 로그 추가
     if (result.response && result.response.usageMetadata) {
       const usage = result.response.usageMetadata;
-      console.log('이미지 합성 토큰 사용량:', {
+      console.log(`[${requestId}] 이미지 합성 토큰 사용량:`, {
         personImage: '1개',
         clothingImages: `${allClothingFiles.length}개`,
         totalImages: `${allClothingFiles.length + 1}개`,
@@ -131,18 +135,18 @@ app.post('/try-on', upload.any(), async (req, res) => {
       });
     }
     
-    console.log('Gemini 응답:', JSON.stringify(response, null, 2));
+    console.log(`[${requestId}] Gemini 응답:`, JSON.stringify(response, null, 2));
  
     // Gemini 응답에서 이미지 데이터 추출
     const candidates = response?.candidates;
     if (!candidates || candidates.length === 0) {
-      console.error('Gemini 응답에 candidates가 없습니다.');
+      console.error(`[${requestId}] Gemini 응답에 candidates가 없습니다.`);
       return res.status(500).json({ success: false, message: 'Gemini API가 응답을 생성하지 못했습니다.' });
     }
 
     const content = candidates[0]?.content;
     if (!content || !content.parts || content.parts.length === 0) {
-      console.error('Gemini 응답에 content.parts가 없습니다.');
+      console.error(`[${requestId}] Gemini 응답에 content.parts가 없습니다.`);
       return res.status(500).json({ success: false, message: 'Gemini API가 이미지를 생성하지 못했습니다.' });
     }
 
@@ -156,8 +160,8 @@ app.post('/try-on', upload.any(), async (req, res) => {
     }
 
     if (!generatedImageBase64) {
-      console.error('Gemini 응답에서 이미지 데이터를 찾을 수 없습니다.');
-      console.error('응답 구조:', JSON.stringify(content.parts, null, 2));
+      console.error(`[${requestId}] Gemini 응답에서 이미지 데이터를 찾을 수 없습니다.`);
+      console.error(`[${requestId}] 응답 구조:`, JSON.stringify(content.parts, null, 2));
       return res.status(500).json({ success: false, message: '생성된 이미지를 찾을 수 없습니다.' });
     }
      const generatedImageBuffer = Buffer.from(generatedImageBase64, 'base64');
@@ -165,20 +169,21 @@ app.post('/try-on', upload.any(), async (req, res) => {
      const fileName = `results/${Date.now()}_result.jpeg`;
      const file = bucket.file(fileName);
  
+     console.log(`[${requestId}] Firebase Storage에 이미지 업로드 시작...`);
      await file.save(generatedImageBuffer, {
        metadata: { contentType: 'image/jpeg' },
        public: true,
      });
  
      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-     console.log('이미지 처리 완료, URL:', publicUrl);
+     console.log(`[${requestId}] 이미지 처리 완료, URL:`, publicUrl);
      
      res.json({ success: true, imageUrl: publicUrl });
  
-   } catch (error) {
-     console.error('서버 에러:', error);
-     res.status(500).json({ success: false, message: '이미지 처리 중 서버 내부 오류가 발생했습니다.' });
-   }
+  } catch (error) {
+    console.error(`[${requestId}] 서버 에러:`, error);
+    res.status(500).json({ success: false, message: '이미지 처리 중 서버 내부 오류가 발생했습니다.' });
+  }
 });
 
 // 코디 추천 엔드포인트
