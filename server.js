@@ -116,34 +116,28 @@ app.post('/try-on', upload.any(), async (req, res) => {
 
     // 프롬프트도 여러 개의 옷을 처리하도록 수정 (원본 이미지 보존 강화)
     const prompt = `
-      You are a professional virtual try-on AI. Your ONLY job is to add clothing items to an existing person photo.
+      You are an expert image editing AI. Your ONLY task is to add clothing to a person in an existing photo without changing anything else.
 
-      INPUT IMAGES:
-      - Image 1: Original person photo (DO NOT MODIFY THIS PERSON)
-      - Images 2-${allClothingFiles.length + 1}: Clothing items to add
+      **INPUTS:**
+      - Image 1: The original photo of the person. THIS IS THE BASE.
+      - Images 2 to ${allClothingFiles.length + 1}: Clothing items.
 
-      STRICT RULES:
-      1. Keep the EXACT same person from the first image - face, hair, skin, body, pose, expression
-      2. Keep the EXACT same background, lighting, and environment
-      3. ONLY add/change clothing items from the provided clothing images
-      4. Make clothing fit naturally on the person's body
-      5. Do NOT generate a new person or change the person's appearance
-      6. Do NOT change the background or environment
-      7. The result must be the original person wearing the new clothes
+      **STRICT RULES (DO NOT DEVIATE):**
+      1. **DO NOT change the person.** The face, hair, body, pose, and expression in the final image must be IDENTICAL to Image 1.
+      2. **DO NOT change the background.** The background must be IDENTICAL to Image 1.
+      3. Your only job is to realistically place the clothing items from the other images onto the person from Image 1.
+      4. If multiple clothing items are provided (e.g., a hat and a shirt), place all of them on the person.
 
-      This is NOT a person generation task. You are ONLY adding clothes to an existing person.
-
-      Output: The original person wearing the clothing items.
+      **Output ONLY the edited image.** Do not generate a new person.
     `;
  
     console.log(`[${requestId}] Gemini API 호출 시작...`);
     
-    // Gemini 모델 설정 조정 (원본 이미지 보존 강화)
+    // 모델의 창의성을 억제하는 생성 옵션을 추가합니다.
     const generationConfig = {
-      temperature: 0.1, // 낮은 온도로 일관성 향상
-      topK: 1, // 가장 확실한 결과만 선택
-      topP: 0.1, // 낮은 확률로 일관성 향상
-      maxOutputTokens: 1024,
+      temperature: 0.2, // 숫자가 낮을수록 더 예측 가능하고 일관된 결과를 냅니다.
+      topP: 0.1,
+      topK: 1,
     };
     
     const result = await imageModel.generateContent([prompt, ...imageParts], generationConfig);
