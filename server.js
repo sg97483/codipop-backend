@@ -96,10 +96,10 @@ app.post('/try-on', upload.any(), async (req, res) => {
       return res.status(400).json({ success: false, message: '사람과 옷 이미지가 모두 필요합니다.' });
     }
 
-    // 옷 아이템 개수 제한 (원본 이미지 보존을 위해 최대 3개로 제한)
-    if (allClothingFiles.length > 3) {
-      console.log(`[${requestId}] 경고: 옷 아이템이 ${allClothingFiles.length}개입니다. 원본 이미지 보존을 위해 처음 3개만 처리합니다.`);
-      allClothingFiles.splice(3); // 처음 3개만 유지
+    // 옷 아이템 개수 제한 (원본 이미지 보존을 위해 최대 2개로 제한)
+    if (allClothingFiles.length > 2) {
+      console.log(`[${requestId}] 경고: 옷 아이템이 ${allClothingFiles.length}개입니다. 원본 이미지 보존을 위해 처음 2개만 처리합니다.`);
+      allClothingFiles.splice(2); // 처음 2개만 유지
     }
 
     console.log(`[${requestId}] 처리할 이미지: 사람 1개, 옷 ${allClothingFiles.length}개`);
@@ -206,9 +206,9 @@ app.post('/try-on', upload.any(), async (req, res) => {
        }
      };
      
-     // 만약 옷 아이템이 3개로 제한되었다면 경고 메시지 추가
-     if (req.files.filter(file => file.fieldname.startsWith('clothing')).length > 3) {
-       responseData.warning = "원본 이미지 보존을 위해 옷 아이템을 최대 3개까지만 처리했습니다.";
+     // 만약 옷 아이템이 2개로 제한되었다면 경고 메시지 추가
+     if (req.files.filter(file => file.fieldname.startsWith('clothing')).length > 2) {
+       responseData.warning = "원본 이미지 보존을 위해 옷 아이템을 최대 2개까지만 처리했습니다.";
      }
      
      res.json(responseData);
