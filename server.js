@@ -96,10 +96,10 @@ app.post('/try-on', upload.any(), async (req, res) => {
       return res.status(400).json({ success: false, message: '사람과 옷 이미지가 모두 필요합니다.' });
     }
 
-    // 옷 아이템 개수 제한 (원본 이미지 보존을 위해 최대 2개로 제한)
-    if (allClothingFiles.length > 2) {
-      console.log(`[${requestId}] 경고: 옷 아이템이 ${allClothingFiles.length}개입니다. 원본 이미지 보존을 위해 처음 2개만 처리합니다.`);
-      allClothingFiles.splice(2); // 처음 2개만 유지
+    // 옷 아이템 개수 제한 (원본 이미지 보존을 위해 최대 3개로 제한)
+    if (allClothingFiles.length > 3) {
+      console.log(`[${requestId}] 경고: 옷 아이템이 ${allClothingFiles.length}개입니다. 원본 이미지 보존을 위해 처음 3개만 처리합니다.`);
+      allClothingFiles.splice(3); // 처음 3개만 유지
     }
 
     console.log(`[${requestId}] 처리할 이미지: 사람 1개, 옷 ${allClothingFiles.length}개`);
@@ -116,26 +116,37 @@ app.post('/try-on', upload.any(), async (req, res) => {
 
     // 프롬프트도 여러 개의 옷을 처리하도록 수정 (원본 이미지 보존 강화)
     const prompt = `
-      You are an expert virtual try-on AI. Your task is to create a realistic image of a person wearing clothing items while preserving the original person's identity completely.
+      You are a professional virtual try-on AI. Your ONLY job is to add clothing items to an existing person photo.
 
-      CRITICAL REQUIREMENTS:
-      1. The first image shows the REAL PERSON - preserve their EXACT face, hair, skin tone, body shape, posture, and facial features
-      2. The following ${allClothingFiles.length} images are clothing items to be worn
-      3. Generate a new image where the person wears ALL ${allClothingFiles.length} clothing items naturally and harmoniously
-      4. DO NOT change the person's face, hair, or body - only add/change clothing
-      5. Maintain the original background, lighting, and environment from the person's image
-      6. Ensure all clothing items fit naturally on the person's body
-      7. The result must look like a real photo of the original person, not an AI-generated image
-      8. Preserve the person's original pose and body language
-      9. Keep the same image quality and style as the original person photo
+      INPUT IMAGES:
+      - Image 1: Original person photo (DO NOT MODIFY THIS PERSON)
+      - Images 2-${allClothingFiles.length + 1}: Clothing items to add
 
-      IMPORTANT: This is a clothing try-on task, not a person generation task. The person must remain exactly the same.
+      STRICT RULES:
+      1. Keep the EXACT same person from the first image - face, hair, skin, body, pose, expression
+      2. Keep the EXACT same background, lighting, and environment
+      3. ONLY add/change clothing items from the provided clothing images
+      4. Make clothing fit naturally on the person's body
+      5. Do NOT generate a new person or change the person's appearance
+      6. Do NOT change the background or environment
+      7. The result must be the original person wearing the new clothes
 
-      Output only the final image with the person wearing the clothing items.
+      This is NOT a person generation task. You are ONLY adding clothes to an existing person.
+
+      Output: The original person wearing the clothing items.
     `;
  
     console.log(`[${requestId}] Gemini API 호출 시작...`);
-    const result = await imageModel.generateContent([prompt, ...imageParts]);
+    
+    // Gemini 모델 설정 조정 (원본 이미지 보존 강화)
+    const generationConfig = {
+      temperature: 0.1, // 낮은 온도로 일관성 향상
+      topK: 1, // 가장 확실한 결과만 선택
+      topP: 0.1, // 낮은 확률로 일관성 향상
+      maxOutputTokens: 1024,
+    };
+    
+    const result = await imageModel.generateContent([prompt, ...imageParts], generationConfig);
     const response = result.response;
     console.log(`[${requestId}] Gemini API 호출 완료`);
     
@@ -206,9 +217,9 @@ app.post('/try-on', upload.any(), async (req, res) => {
        }
      };
      
-     // 만약 옷 아이템이 2개로 제한되었다면 경고 메시지 추가
-     if (req.files.filter(file => file.fieldname.startsWith('clothing')).length > 2) {
-       responseData.warning = "원본 이미지 보존을 위해 옷 아이템을 최대 2개까지만 처리했습니다.";
+     // 만약 옷 아이템이 3개로 제한되었다면 경고 메시지 추가
+     if (req.files.filter(file => file.fieldname.startsWith('clothing')).length > 3) {
+       responseData.warning = "원본 이미지 보존을 위해 옷 아이템을 최대 3개까지만 처리했습니다.";
      }
      
      res.json(responseData);
