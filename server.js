@@ -96,6 +96,12 @@ app.post('/try-on', upload.any(), async (req, res) => {
       return res.status(400).json({ success: false, message: '사람과 옷 이미지가 모두 필요합니다.' });
     }
 
+    // 옷 아이템 개수 제한 (원본 이미지 보존을 위해 최대 2개로 제한)
+    if (allClothingFiles.length > 2) {
+      console.log(`[${requestId}] 경고: 옷 아이템이 ${allClothingFiles.length}개입니다. 원본 이미지 보존을 위해 처음 2개만 처리합니다.`);
+      allClothingFiles.splice(2); // 처음 2개만 유지
+    }
+
     console.log(`[${requestId}] 처리할 이미지: 사람 1개, 옷 ${allClothingFiles.length}개`);
 
     // 이미지 파트 구성 (사람 이미지 + 여러 옷 이미지)
@@ -108,13 +114,20 @@ app.post('/try-on', upload.any(), async (req, res) => {
       });
     });
 
-    // 프롬프트도 여러 개의 옷을 처리하도록 수정
+    // 프롬프트도 여러 개의 옷을 처리하도록 수정 (원본 이미지 보존 강화)
     const prompt = `
-      You are an expert virtual try-on AI.
-      Using the first image of the person and the following ${allClothingFiles.length} clothing images, generate a new image where the person is wearing all the clothing items together.
-      Combine all clothing items naturally. For example, if there is a top and pants, wear them together. If there is a hat, top, and pants, wear all three.
-      Maintain the person's original face, hair, and body shape.
-      The output must be only the resulting image.
+      You are an expert virtual try-on AI. Your task is to create a realistic image of a person wearing clothing items while preserving the original person's identity completely.
+
+      CRITICAL REQUIREMENTS:
+      1. The first image shows the REAL PERSON - preserve their exact face, hair, skin tone, body shape, and posture
+      2. The following ${allClothingFiles.length} images are clothing items to be worn
+      3. Generate a new image where the person wears ALL clothing items naturally
+      4. DO NOT change the person's face, hair, or body - only add/change clothing
+      5. Maintain the original background and lighting from the person's image
+      6. Ensure the clothing fits naturally on the person's body
+      7. The result must look like a real photo, not an AI-generated image
+
+      Output only the final image with the person wearing the clothing items.
     `;
  
     console.log(`[${requestId}] Gemini API 호출 시작...`);
@@ -178,7 +191,23 @@ app.post('/try-on', upload.any(), async (req, res) => {
      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
      console.log(`[${requestId}] 이미지 처리 완료, URL:`, publicUrl);
      
-     res.json({ success: true, imageUrl: publicUrl });
+     // 클라이언트에 처리된 아이템 개수 정보 포함
+     const responseData = { 
+       success: true, 
+       imageUrl: publicUrl,
+       processedItems: {
+         person: 1,
+         clothing: allClothingFiles.length,
+         total: allClothingFiles.length + 1
+       }
+     };
+     
+     // 만약 옷 아이템이 2개로 제한되었다면 경고 메시지 추가
+     if (req.files.filter(file => file.fieldname.startsWith('clothing')).length > 2) {
+       responseData.warning = "원본 이미지 보존을 위해 옷 아이템을 최대 2개까지만 처리했습니다.";
+     }
+     
+     res.json(responseData);
  
   } catch (error) {
     console.error(`[${requestId}] 서버 에러:`, error);
