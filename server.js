@@ -1,4 +1,4 @@
- // server.js (최종 수정 버전)
+// server.js (최종 수정 버전)
 
 const express = require('express');
 const multer = require('multer');
@@ -22,16 +22,16 @@ app.use((req, res, next) => {
     next();
   }
 });
- 
- // Google AI 설정
- const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
- 
- // 1. 이미지 생성용 모델 (이미지 합성에 최적화)
- const imageModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
- 
- // 2. 텍스트 생성용 모델 (더 저렴하고 빠름)
- const textModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
- 
+
+// Google AI 설정
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// 1. 이미지 생성용 모델 (이미지 합성에 최적화)
+const imageModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
+
+// 2. 텍스트 생성용 모델 (더 저렴하고 빠름)
+const textModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+
 // Firebase Storage 설정 (환경 변수 사용)
 let storage;
 if (process.env.GOOGLE_CREDENTIALS) {
@@ -48,21 +48,21 @@ if (process.env.GOOGLE_CREDENTIALS) {
   });
 }
 const bucket = storage.bucket('codipop-63c0d.firebasestorage.app');
- 
- const upload = multer({ 
-   storage: multer.memoryStorage(),
-   fileFilter: (req, file, cb) => {
-     // 모든 파일 허용
-     cb(null, true);
-   }
- });
- 
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    // 모든 파일 허용
+    cb(null, true);
+  }
+});
+
 app.use(express.json());
 
 // 기본 라우트 (서버 상태 확인용)
 app.get('/', (req, res) => {
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: 'CodiPOP Backend Server is running!',
     timestamp: new Date().toISOString()
   });
@@ -73,22 +73,22 @@ app.post('/try-on', upload.any(), async (req, res) => {
   const requestId = Date.now();
   console.log(`[${requestId}] 이미지 처리 요청 받음 (다중 옷 이미지)...`);
   console.log(`[${requestId}] 요청 헤더:`, JSON.stringify(req.headers, null, 2));
-  
+
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: '이미지 파일이 필요합니다.' });
     }
-    
+
     // 디버깅: 받은 모든 파일 정보 출력
     console.log(`[${requestId}] 받은 모든 파일들:`);
     req.files.forEach((file, index) => {
       console.log(`[${requestId}]   ${index + 1}. fieldname: "${file.fieldname}", originalname: "${file.originalname}", size: ${file.size} bytes`);
     });
-    
+
     // 전송된 파일들 중에서 'person'과 'clothing'들을 구분합니다.
     const personFile = req.files.find(file => file.fieldname === 'person');
     const clothingFiles = req.files.filter(file => file.fieldname.startsWith('clothing'));
-    
+
     // 만약 clothing으로 시작하는 파일이 없다면, person이 아닌 모든 파일을 옷으로 간주
     const allClothingFiles = clothingFiles.length > 0 ? clothingFiles : req.files.filter(file => file.fieldname !== 'person');
 
@@ -125,25 +125,26 @@ app.post('/try-on', upload.any(), async (req, res) => {
       **STRICT RULES (DO NOT DEVIATE):**
       1. **DO NOT change the person.** The face, hair, body, pose, and expression in the final image must be IDENTICAL to Image 1.
       2. **DO NOT change the background.** The background must be IDENTICAL to Image 1.
-      3. Your only job is to realistically place the clothing items from the other images onto the person from Image 1.
-      4. If multiple clothing items are provided (e.g., a hat and a shirt), place all of them on the person.
+      3. **MAINTAIN ASPECT RATIO:** The output image MUST have the exact same aspect ratio and dimensions as Image 1. Do NOT crop or resize the image.
+      4. Your only job is to realistically place the clothing items from the other images onto the person from Image 1.
+      5. If multiple clothing items are provided (e.g., a hat and a shirt), place all of them on the person.
 
       **Output ONLY the edited image.** Do not generate a new person.
     `;
- 
+
     console.log(`[${requestId}] Gemini API 호출 시작...`);
-    
+
     // 모델의 창의성을 억제하는 생성 옵션을 추가합니다.
     const generationConfig = {
       temperature: 0.2, // 숫자가 낮을수록 더 예측 가능하고 일관된 결과를 냅니다.
       topP: 0.1,
       topK: 1,
     };
-    
+
     const result = await imageModel.generateContent([prompt, ...imageParts], generationConfig);
     const response = result.response;
     console.log(`[${requestId}] Gemini API 호출 완료`);
-    
+
     // 토큰 사용량 로그 추가
     if (result.response && result.response.usageMetadata) {
       const usage = result.response.usageMetadata;
@@ -156,9 +157,9 @@ app.post('/try-on', upload.any(), async (req, res) => {
         totalTokenCount: usage.totalTokenCount
       });
     }
-    
+
     console.log(`[${requestId}] Gemini 응답:`, JSON.stringify(response, null, 2));
- 
+
     // Gemini 응답에서 이미지 데이터 추출
     const candidates = response?.candidates;
     if (!candidates || candidates.length === 0) {
@@ -186,38 +187,38 @@ app.post('/try-on', upload.any(), async (req, res) => {
       console.error(`[${requestId}] 응답 구조:`, JSON.stringify(content.parts, null, 2));
       return res.status(500).json({ success: false, message: '생성된 이미지를 찾을 수 없습니다.' });
     }
-     const generatedImageBuffer = Buffer.from(generatedImageBase64, 'base64');
-     
-     const fileName = `results/${Date.now()}_result.jpeg`;
-     const file = bucket.file(fileName);
- 
-     console.log(`[${requestId}] Firebase Storage에 이미지 업로드 시작...`);
-     await file.save(generatedImageBuffer, {
-       metadata: { contentType: 'image/jpeg' },
-       public: true,
-     });
- 
-     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-     console.log(`[${requestId}] 이미지 처리 완료, URL:`, publicUrl);
-     
-     // 클라이언트에 처리된 아이템 개수 정보 포함
-     const responseData = { 
-       success: true, 
-       imageUrl: publicUrl,
-       processedItems: {
-         person: 1,
-         clothing: allClothingFiles.length,
-         total: allClothingFiles.length + 1
-       }
-     };
-     
+    const generatedImageBuffer = Buffer.from(generatedImageBase64, 'base64');
+
+    const fileName = `results/${Date.now()}_result.jpeg`;
+    const file = bucket.file(fileName);
+
+    console.log(`[${requestId}] Firebase Storage에 이미지 업로드 시작...`);
+    await file.save(generatedImageBuffer, {
+      metadata: { contentType: 'image/jpeg' },
+      public: true,
+    });
+
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    console.log(`[${requestId}] 이미지 처리 완료, URL:`, publicUrl);
+
+    // 클라이언트에 처리된 아이템 개수 정보 포함
+    const responseData = {
+      success: true,
+      imageUrl: publicUrl,
+      processedItems: {
+        person: 1,
+        clothing: allClothingFiles.length,
+        total: allClothingFiles.length + 1
+      }
+    };
+
     // 만약 옷 아이템이 2개로 제한되었다면 경고 메시지 추가
     if (req.files.filter(file => file.fieldname.startsWith('clothing')).length > 2) {
       responseData.warning = "원본 이미지 보존을 위해 옷 아이템을 최대 2개까지만 처리했습니다.";
     }
-     
-     res.json(responseData);
- 
+
+    res.json(responseData);
+
   } catch (error) {
     console.error(`[${requestId}] 서버 에러:`, error);
     res.status(500).json({ success: false, message: '이미지 처리 중 서버 내부 오류가 발생했습니다.' });
@@ -246,13 +247,13 @@ app.post('/get-recommendation', async (req, res) => {
     if (closetSnapshot.empty) {
       return res.json({ success: true, recommendation: "옷장에 아이템을 먼저 추가해주세요!" });
     }
-    
+
     const prompt = `
       한 패션 전문 AI 스타일리스트로서, 사용자의 옷장 아이템을 기반으로 오늘 날씨(서울, 맑음, 22도, 가을)에 어울리는 코디를 제안해줘.
       사용자의 옷장에는 주로 '베이지색 니트', '청바지', '블라우스' 같은 아이템이 있어.
       캐주얼하면서도 세련된 스타일로 추천해줘.
     `;
-    
+
     const result = await textModel.generateContent(prompt);
     const response = await result.response;
     const recommendationText = response.text();
@@ -267,5 +268,5 @@ app.post('/get-recommendation', async (req, res) => {
 });
 
 app.listen(port, () => {
- console.log(`CodiPOP 백엔드 서버가 http://localhost:${port} 에서 실행 중입니다.`);
+  console.log(`CodiPOP 백엔드 서버가 http://localhost:${port} 에서 실행 중입니다.`);
 });
