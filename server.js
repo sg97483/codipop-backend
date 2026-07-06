@@ -98,6 +98,12 @@ app.get('/', (req, res) => {
   });
 });
 
+// AdMob app-ads.txt 인증용 (Play Console/App Store 개발자 웹사이트 루트에서 크롤링)
+app.get('/app-ads.txt', (req, res) => {
+  res.type('text/plain');
+  res.send('google.com, pub-6990308526694074, DIRECT, f08c47fec0942fa0\n');
+});
+
 // --- API 엔드포인트 ---
 app.post('/try-on', upload.any(), async (req, res) => {
   const requestId = Date.now();
