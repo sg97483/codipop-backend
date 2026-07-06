@@ -234,6 +234,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
     await file.save(generatedImageBuffer, {
       metadata: { contentType: 'image/jpeg' },
       public: true,
+      resumable: false, // 작은 파일은 단일 요청 업로드가 훨씬 빠름 (resumable은 요청 왕복이 3회 이상)
     });
     console.log(`[${requestId}] Storage 업로드 완료 (${Date.now() - uploadStart}ms)`);
 
