@@ -2,6 +2,7 @@
 
 const express = require('express');
 const multer = require('multer');
+const sharp = require('sharp');
 const { GoogleGenAI } = require('@google/genai');
 const { Storage } = require('@google-cloud/storage');
 const path = require('path');
@@ -58,6 +59,34 @@ const upload = multer({
   }
 });
 
+// Gemini 전송 전 이미지 축소 설정 (base64 전송량을 줄여 왕복 시간 단축)
+const MAX_IMAGE_DIMENSION = parseInt(process.env.MAX_IMAGE_DIMENSION, 10) || 1536;
+const RESIZE_JPEG_QUALITY = 82;
+
+async function optimizeImageForGemini(file) {
+  try {
+    const optimized = await sharp(file.buffer)
+      .rotate() // EXIF 회전 정보 반영 (리사이즈 시 회전 메타데이터가 유실되므로 픽셀에 직접 적용)
+      .resize(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: RESIZE_JPEG_QUALITY })
+      .toBuffer();
+    return {
+      data: optimized.toString('base64'),
+      mimeType: 'image/jpeg',
+      originalBytes: file.size,
+      optimizedBytes: optimized.length,
+    };
+  } catch (error) {
+    console.warn(`이미지 최적화 실패, 원본 그대로 전송 (${file.originalname}):`, error.message);
+    return {
+      data: file.buffer.toString('base64'),
+      mimeType: file.mimetype,
+      originalBytes: file.size,
+      optimizedBytes: file.size,
+    };
+  }
+}
+
 app.use(express.json());
 
 // 기본 라우트 (서버 상태 확인용)
@@ -105,15 +134,18 @@ app.post('/try-on', upload.any(), async (req, res) => {
 
     console.log(`[${requestId}] 처리할 이미지: 사람 1개, 옷 ${allClothingFiles.length}개`);
 
-    // 이미지 파트 구성 (사람 이미지 + 여러 옷 이미지)
-    const imageParts = [
-      { inlineData: { data: personFile.buffer.toString('base64'), mimeType: personFile.mimetype } }
-    ];
-    allClothingFiles.forEach(file => {
-      imageParts.push({
-        inlineData: { data: file.buffer.toString('base64'), mimeType: file.mimetype }
-      });
-    });
+    // 이미지 리사이즈 (Gemini 전송량 절감)
+    const resizeStart = Date.now();
+    const optimizedImages = await Promise.all(
+      [personFile, ...allClothingFiles].map(file => optimizeImageForGemini(file))
+    );
+    const totalOriginalKB = Math.round(optimizedImages.reduce((sum, img) => sum + img.originalBytes, 0) / 1024);
+    const totalOptimizedKB = Math.round(optimizedImages.reduce((sum, img) => sum + img.optimizedBytes, 0) / 1024);
+    console.log(`[${requestId}] 이미지 리사이즈 완료: ${totalOriginalKB}KB -> ${totalOptimizedKB}KB (${Date.now() - resizeStart}ms)`);
+
+    const imageParts = optimizedImages.map(img => ({
+      inlineData: { data: img.data, mimeType: img.mimeType }
+    }));
 
     // 프롬프트도 여러 개의 옷을 처리하도록 수정 (원본 이미지 보존 강화)
     const prompt = `
@@ -134,6 +166,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
     `;
 
     console.log(`[${requestId}] Gemini API 호출 시작 (모델: ${IMAGE_MODEL})...`);
+    const geminiStart = Date.now();
 
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
@@ -143,7 +176,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
         temperature: 0.2,
       },
     });
-    console.log(`[${requestId}] Gemini API 호출 완료`);
+    console.log(`[${requestId}] Gemini API 호출 완료 (${Date.now() - geminiStart}ms)`);
 
     // 토큰 사용량 로그 추가
     if (response && response.usageMetadata) {
@@ -197,13 +230,15 @@ app.post('/try-on', upload.any(), async (req, res) => {
     const file = bucket.file(fileName);
 
     console.log(`[${requestId}] Firebase Storage에 이미지 업로드 시작...`);
+    const uploadStart = Date.now();
     await file.save(generatedImageBuffer, {
       metadata: { contentType: 'image/jpeg' },
       public: true,
     });
+    console.log(`[${requestId}] Storage 업로드 완료 (${Date.now() - uploadStart}ms)`);
 
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-    console.log(`[${requestId}] 이미지 처리 완료, URL:`, publicUrl);
+    console.log(`[${requestId}] 이미지 처리 완료 (총 ${Date.now() - requestId}ms), URL:`, publicUrl);
 
     // 클라이언트에 처리된 아이템 개수 정보 포함
     const responseData = {
