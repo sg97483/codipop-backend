@@ -147,22 +147,29 @@ app.post('/try-on', upload.any(), async (req, res) => {
       inlineData: { data: img.data, mimeType: img.mimeType }
     }));
 
-    // 프롬프트도 여러 개의 옷을 처리하도록 수정 (원본 이미지 보존 강화)
+    // 가상 착장 프롬프트 (교체/겹치기 구분, 옷 디테일 보존, 조명 일치 지시 포함)
     const prompt = `
-      You are an expert image editing AI. Your ONLY task is to add clothing to a person in an existing photo without changing anything else.
+      You are an expert virtual try-on image editing AI. Edit the original photo so the person is wearing the provided clothing items. Change NOTHING else.
 
       **INPUTS:**
       - Image 1: The original photo of the person. THIS IS THE BASE.
-      - Images 2 to ${allClothingFiles.length + 1}: Clothing items.
+      - Images 2 to ${allClothingFiles.length + 1}: Clothing items to put on the person.
+
+      **HOW TO APPLY CLOTHING:**
+      - If an item is a top/shirt/knit/dress: REPLACE the corresponding garment the person is currently wearing.
+      - If an item is outerwear (jacket, cardigan, coat): layer it naturally OVER the current outfit.
+      - If an item is an accessory (hat, cap, earmuffs): add it without altering the hair more than necessary.
+      - Reproduce each clothing item EXACTLY: same color, pattern, logo, texture, and details as its reference image.
+      - Fit the clothing naturally to the person's body with realistic wrinkles, draping, and proportions.
+      - Match the lighting, shadows, and color tone of the original photo so the result looks like one real photograph.
 
       **STRICT RULES (DO NOT DEVIATE):**
-      1. **DO NOT change the person.** The face, hair, body, pose, and expression in the final image must be IDENTICAL to Image 1.
-      2. **DO NOT change the background.** The background must be IDENTICAL to Image 1.
-      3. **MAINTAIN ASPECT RATIO:** The output image MUST have the exact same aspect ratio and dimensions as Image 1. Do NOT crop or resize the image.
-      4. Your only job is to realistically place the clothing items from the other images onto the person from Image 1.
-      5. If multiple clothing items are provided (e.g., a hat and a shirt), place all of them on the person.
+      1. DO NOT change the person: face, hair, skin tone, body shape, pose, and expression must be IDENTICAL to Image 1.
+      2. DO NOT change the background: it must be IDENTICAL to Image 1.
+      3. MAINTAIN the exact same aspect ratio and framing as Image 1. Do NOT crop, zoom, or resize.
+      4. Apply ALL provided clothing items.
 
-      **Output ONLY the edited image.** Do not generate a new person.
+      **Output ONLY the edited image.** Do not generate a new person or a new scene.
     `;
 
     console.log(`[${requestId}] Gemini API 호출 시작 (모델: ${IMAGE_MODEL})...`);
