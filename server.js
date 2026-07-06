@@ -2,7 +2,7 @@
 
 const express = require('express');
 const multer = require('multer');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 const { firestore } = require('./firebase-admin.js');
@@ -23,14 +23,15 @@ app.use((req, res, next) => {
   }
 });
 
-// Google AI 설정
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Google AI 설정 (신규 @google/genai SDK)
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// 1. 이미지 생성용 모델 (이미지 합성에 최적화)
-const imageModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
+// 1. 이미지 생성용 모델 (Nano Banana 2 Lite: 최저가 $0.034/장, 약 4초 생성)
+//    합성 품질이 아쉬우면 환경변수로 IMAGE_MODEL=gemini-3.1-flash-image (Nano Banana 2, $0.067/장) 지정
+const IMAGE_MODEL = process.env.IMAGE_MODEL || 'gemini-3.1-flash-lite-image';
 
-// 2. 텍스트 생성용 모델 (더 저렴하고 빠름)
-const textModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+// 2. 텍스트 생성용 모델 (구 gemini-1.5-flash-latest 대체, 더 저렴하고 빠름)
+const TEXT_MODEL = process.env.TEXT_MODEL || 'gemini-2.5-flash-lite';
 
 // Firebase Storage 설정 (환경 변수 사용)
 let storage;
@@ -132,22 +133,21 @@ app.post('/try-on', upload.any(), async (req, res) => {
       **Output ONLY the edited image.** Do not generate a new person.
     `;
 
-    console.log(`[${requestId}] Gemini API 호출 시작...`);
+    console.log(`[${requestId}] Gemini API 호출 시작 (모델: ${IMAGE_MODEL})...`);
 
-    // 모델의 창의성을 억제하는 생성 옵션을 추가합니다.
-    const generationConfig = {
-      temperature: 0.2, // 숫자가 낮을수록 더 예측 가능하고 일관된 결과를 냅니다.
-      topP: 0.1,
-      topK: 1,
-    };
-
-    const result = await imageModel.generateContent([prompt, ...imageParts], generationConfig);
-    const response = result.response;
+    const response = await ai.models.generateContent({
+      model: IMAGE_MODEL,
+      contents: [{ role: 'user', parts: [{ text: prompt }, ...imageParts] }],
+      config: {
+        // 낮은 temperature로 원본(인물/배경) 보존 일관성 강화
+        temperature: 0.2,
+      },
+    });
     console.log(`[${requestId}] Gemini API 호출 완료`);
 
     // 토큰 사용량 로그 추가
-    if (result.response && result.response.usageMetadata) {
-      const usage = result.response.usageMetadata;
+    if (response && response.usageMetadata) {
+      const usage = response.usageMetadata;
       console.log(`[${requestId}] 이미지 합성 토큰 사용량:`, {
         personImage: '1개',
         clothingImages: `${allClothingFiles.length}개`,
@@ -158,7 +158,11 @@ app.post('/try-on', upload.any(), async (req, res) => {
       });
     }
 
-    console.log(`[${requestId}] Gemini 응답:`, JSON.stringify(response, null, 2));
+    // 응답 전체(base64 포함)를 로그로 남기면 수 MB가 찍히므로 구조 요약만 출력
+    const partSummary = response?.candidates?.[0]?.content?.parts?.map(p =>
+      p.inlineData ? `image(${p.inlineData.mimeType})` : Object.keys(p).join(',')
+    );
+    console.log(`[${requestId}] Gemini 응답 파트:`, JSON.stringify(partSummary));
 
     // Gemini 응답에서 이미지 데이터 추출
     const candidates = response?.candidates;
@@ -227,7 +231,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
 
 // 코디 추천 엔드포인트
 app.post('/get-recommendation', async (req, res) => {
-  console.log('코디 추천 요청 받음 (gemini-1.5-flash-latest 사용)...');
+  console.log(`코디 추천 요청 받음 (${TEXT_MODEL} 사용)...`);
   const { userId } = req.body;
 
   if (!userId) {
@@ -254,9 +258,11 @@ app.post('/get-recommendation', async (req, res) => {
       캐주얼하면서도 세련된 스타일로 추천해줘.
     `;
 
-    const result = await textModel.generateContent(prompt);
-    const response = await result.response;
-    const recommendationText = response.text();
+    const response = await ai.models.generateContent({
+      model: TEXT_MODEL,
+      contents: prompt,
+    });
+    const recommendationText = response.text;
 
     console.log('Gemini 코디 추천:', recommendationText);
     res.json({ success: true, recommendation: recommendationText });
