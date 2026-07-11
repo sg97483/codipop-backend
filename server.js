@@ -105,10 +105,17 @@ app.get('/app-ads.txt', (req, res) => {
 });
 
 // 파일럿 몰 제휴용 데모 (외부 공유 URL)
-app.get('/demo', (req, res) => {
-  res.redirect(301, '/demo/');
+// https://codipop-backend.onrender.com/demo/
+app.use(
+  '/demo',
+  express.static(path.join(__dirname, 'public/demo'), {
+    index: 'index.html',
+    redirect: false,
+  }),
+);
+app.get(['/demo', '/demo/'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/demo/index.html'));
 });
-app.use('/demo', express.static(path.join(__dirname, 'public/demo')));
 
 // --- API 엔드포인트 ---
 app.post('/try-on', upload.any(), async (req, res) => {
