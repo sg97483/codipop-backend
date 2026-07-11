@@ -104,6 +104,12 @@ app.get('/app-ads.txt', (req, res) => {
   res.send('google.com, pub-6990308526694074, DIRECT, f08c47fec0942fa0\n');
 });
 
+// 파일럿 몰 제휴용 데모 (외부 공유 URL)
+app.get('/demo', (req, res) => {
+  res.redirect(301, '/demo/');
+});
+app.use('/demo', express.static(path.join(__dirname, 'public/demo')));
+
 // --- API 엔드포인트 ---
 app.post('/try-on', upload.any(), async (req, res) => {
   const requestId = Date.now();

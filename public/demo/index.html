@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>DEMO MALL × CodiPOP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- 몰 홈 -->
+      <section id="view-home" class="view is-active">
+        <header class="mall-top">
+          <p class="mall-eyebrow">Pilot partner demo</p>
+          <h1 class="mall-brand">DEMO MALL</h1>
+          <p class="mall-sub">
+            상품 상세의 <strong>착용해 보기</strong>만 붙이면 되는 흐름을
+            보여줍니다.
+          </p>
+        </header>
+        <div class="product-grid" id="product-grid"></div>
+        <footer class="mall-foot">
+          Powered by <span>CodiPOP</span> · 앱 설치 없이 웹에서 피팅
+        </footer>
+      </section>
+
+      <!-- 상품 상세 -->
+      <section id="view-product" class="view">
+        <button type="button" class="back-link" data-nav="home">← 목록</button>
+        <div class="hero-wrap">
+          <img id="product-hero" class="product-hero" alt="" />
+          <button type="button" id="btn-try-on" class="try-on-btn">
+            <span class="try-on-icon" aria-hidden="true"></span>
+            착용해 보기
+          </button>
+        </div>
+        <div class="product-body">
+          <p class="product-badge" id="product-badge"></p>
+          <h2 class="product-title" id="product-title"></h2>
+          <p class="product-price" id="product-price"></p>
+          <p class="product-desc" id="product-desc"></p>
+          <div class="buy-row">
+            <button type="button" class="btn-secondary" id="btn-cart">
+              장바구니
+            </button>
+            <button type="button" class="btn-primary" id="btn-buy-detail">
+              바로 구매
+            </button>
+          </div>
+          <p class="hint">
+            ※ 위 <em>착용해 보기</em> 버튼이 몰 상세에 붙는 코디팝 위젯입니다.
+          </p>
+        </div>
+      </section>
+
+      <!-- 피팅 -->
+      <section id="view-tryon" class="view">
+        <button type="button" class="back-link" data-nav="product">
+          ← 상품으로
+        </button>
+        <div class="tryon-head">
+          <p class="codipop-mark">CodiPOP</p>
+          <h2>내 사진으로 입어보기</h2>
+          <p class="tryon-sub">앱 설치 없이 바로 피팅합니다.</p>
+        </div>
+        <div class="tryon-layout">
+          <div class="tryon-card">
+            <p class="card-label">이 상품</p>
+            <img id="tryon-clothing" alt="상품" />
+          </div>
+          <div class="tryon-card">
+            <p class="card-label">내 사진</p>
+            <div id="person-preview" class="person-preview empty">
+              <span>사진을 선택하세요</span>
+            </div>
+            <div class="person-actions">
+              <label class="btn-secondary file-btn">
+                사진 선택
+                <input type="file" id="person-input" accept="image/*" hidden />
+              </label>
+              <button type="button" class="btn-ghost" id="btn-sample-person">
+                체험용 사진 쓰기
+              </button>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn-primary btn-block" id="btn-start-fit" disabled>
+          AI 피팅 시작
+        </button>
+        <p class="api-note">
+          API: <code id="api-endpoint"></code>
+        </p>
+      </section>
+
+      <!-- 로딩 / 결과 -->
+      <section id="view-result" class="view">
+        <div id="loading-panel" class="loading-panel hidden">
+          <div class="spinner"></div>
+          <h2>AI가 입어보는 중</h2>
+          <p>보통 3~10초 정도 걸려요.</p>
+          <p class="elapsed" id="elapsed">0.0초</p>
+        </div>
+        <div id="result-panel" class="result-panel hidden">
+          <button type="button" class="back-link" data-nav="product">
+            ← 상품으로
+          </button>
+          <p class="codipop-mark">CodiPOP 피팅 결과</p>
+          <div class="result-compare">
+            <figure>
+              <img id="result-before" alt="원본" />
+              <figcaption>Before</figcaption>
+            </figure>
+            <figure>
+              <img id="result-after" alt="피팅 결과" />
+              <figcaption>After</figcaption>
+            </figure>
+          </div>
+          <button type="button" class="btn-primary btn-block" id="btn-buy-result">
+            이 상품 구매하기
+          </button>
+          <button type="button" class="btn-secondary btn-block" id="btn-retry">
+            다른 사진으로 다시 피팅
+          </button>
+          <p class="hint center">
+            구매하기를 누르면 <strong>몰 상품 페이지</strong>로 돌아갑니다.
+          </p>
+        </div>
+        <div id="error-panel" class="error-panel hidden">
+          <h2>피팅에 실패했어요</h2>
+          <p id="error-message"></p>
+          <button type="button" class="btn-primary" data-nav="tryon">
+            다시 시도
+          </button>
+        </div>
+      </section>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
