@@ -291,6 +291,76 @@ app.post('/try-on', upload.any(), async (req, res) => {
   }
 });
 
+// 쇼핑몰 캡쳐/스캔 이미지 카테고리 분석
+app.post('/analyze-clothing', upload.any(), async (req, res) => {
+  const requestId = Date.now();
+  console.log(`[${requestId}] 의류 분석 요청 (/analyze-clothing)`);
+
+  try {
+    const imageFile =
+      (req.files || []).find(file => file.fieldname === 'image') ||
+      (req.files || [])[0];
+
+    if (!imageFile) {
+      return res.status(400).json({ success: false, message: '이미지 파일이 필요합니다.' });
+    }
+
+    const optimized = await optimizeImageForGemini(imageFile);
+    const prompt = `
+You analyze a clothing product photo for a virtual try-on closet app.
+Return ONLY valid JSON with this shape:
+{"category":"TOPS|BOTTOMS|SHOES|OUTER","productName":"short Korean product name","confidence":0.0}
+
+Rules:
+- category must be exactly one of: TOPS, BOTTOMS, SHOES, OUTER
+- If unsure between categories, pick the most likely and lower confidence
+- productName should be brief (e.g. "레드 티셔츠")
+- Do not wrap JSON in markdown
+`;
+
+    const response = await ai.models.generateContent({
+      model: TEXT_MODEL,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                data: optimized.data,
+                mimeType: optimized.mimeType,
+              },
+            },
+          ],
+        },
+      ],
+      config: { temperature: 0.1 },
+    });
+
+    const rawText = (response.text || '').trim();
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error(`[${requestId}] JSON 파싱 실패:`, rawText);
+      return res.status(500).json({ success: false, message: '분석 결과를 해석하지 못했습니다.' });
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const allowed = new Set(['TOPS', 'BOTTOMS', 'SHOES', 'OUTER']);
+    const category = allowed.has(parsed.category) ? parsed.category : 'TOPS';
+
+    console.log(`[${requestId}] 분석 결과:`, parsed);
+    return res.json({
+      success: true,
+      category,
+      productName: parsed.productName || '',
+      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
+    });
+  } catch (error) {
+    console.error(`[${requestId}] 의류 분석 에러:`, error);
+    return res.status(500).json({ success: false, message: '의류 분석 중 오류가 발생했습니다.' });
+  }
+});
+
 // 코디 추천 엔드포인트
 app.post('/get-recommendation', async (req, res) => {
   console.log(`코디 추천 요청 받음 (${TEXT_MODEL} 사용)...`);
