@@ -153,6 +153,21 @@ app.post('/try-on', upload.any(), async (req, res) => {
 
     console.log(`[${requestId}] 처리할 이미지: 사람 1개, 옷 ${allClothingFiles.length}개`);
 
+    const heightCm = Number(req.body?.heightCm);
+    const weightKg = Number(req.body?.weightKg);
+    const usualSize = typeof req.body?.usualSize === 'string' ? req.body.usualSize.trim() : '';
+    const hasBodySize =
+      Number.isFinite(heightCm) &&
+      heightCm >= 120 &&
+      heightCm <= 230 &&
+      Number.isFinite(weightKg) &&
+      weightKg >= 30 &&
+      weightKg <= 200;
+
+    if (hasBodySize) {
+      console.log(`[${requestId}] 체형 정보 반영: ${heightCm}cm / ${weightKg}kg / usual=${usualSize || 'n/a'}`);
+    }
+
     // 이미지 리사이즈 (Gemini 전송량 절감)
     const resizeStart = Date.now();
     const optimizedImages = await Promise.all(
@@ -166,6 +181,16 @@ app.post('/try-on', upload.any(), async (req, res) => {
       inlineData: { data: img.data, mimeType: img.mimeType }
     }));
 
+    const bodySizeGuidance = hasBodySize
+      ? `
+      **BODY SIZE GUIDANCE (soft fit only):**
+      - The wearer profile is approximately ${heightCm} cm and ${weightKg} kg${usualSize ? `, usual clothing size ${usualSize}` : ''}.
+      - Use this only to adjust how the clothing drapes and how fitted/loose it looks on the person already in Image 1.
+      - Do NOT redraw or morph the person's body into a different physique. Keep the person's body silhouette from Image 1.
+      - Prefer realistic sleeve length, hem length, and fabric tension consistent with that profile.
+      `
+      : '';
+
     // 가상 착장 프롬프트 (교체/겹치기 구분, 옷 디테일 보존, 조명 일치 지시 포함)
     const prompt = `
       You are an expert virtual try-on image editing AI. Edit the original photo so the person is wearing the provided clothing items. Change NOTHING else.
@@ -173,7 +198,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
       **INPUTS:**
       - Image 1: The original photo of the person. THIS IS THE BASE.
       - Images 2 to ${allClothingFiles.length + 1}: Clothing items to put on the person.
-
+      ${bodySizeGuidance}
       **HOW TO APPLY CLOTHING:**
       - If an item is a top/shirt/knit/dress: REPLACE the corresponding garment the person is currently wearing.
       - If an item is outerwear (jacket, cardigan, coat): layer it naturally OVER the current outfit.
@@ -183,10 +208,11 @@ app.post('/try-on', upload.any(), async (req, res) => {
       - Match the lighting, shadows, and color tone of the original photo so the result looks like one real photograph.
 
       **STRICT RULES (DO NOT DEVIATE):**
-      1. DO NOT change the person: face, hair, skin tone, body shape, pose, and expression must be IDENTICAL to Image 1.
-      2. DO NOT change the background: it must be IDENTICAL to Image 1.
-      3. MAINTAIN the exact same aspect ratio and framing as Image 1. Do NOT crop, zoom, or resize.
-      4. Apply ALL provided clothing items.
+      1. DO NOT change the person: face, hair, skin tone, pose, and expression must be IDENTICAL to Image 1.
+      2. DO NOT invent a different body type; keep the person's overall silhouette from Image 1, using body-size guidance only for clothing drape/fit.
+      3. DO NOT change the background: it must be IDENTICAL to Image 1.
+      4. MAINTAIN the exact same aspect ratio and framing as Image 1. Do NOT crop, zoom, or resize.
+      5. Apply ALL provided clothing items.
 
       **Output ONLY the edited image.** Do not generate a new person or a new scene.
     `;
