@@ -43,8 +43,8 @@ function safeStr(value, max) {
 /**
  * 환경변수 TENANTS 파싱.
  *
- *   TENANTS={"lirin":{"name":"리린","tier":"standard","apiKey":"pk_live_a1b2",
- *                     "dashboardToken":"sk_live_x9y8",
+ *   TENANTS={"lirin":{"name":"리린","tier":"standard","apiKey":"pk_cdp_a1b2",
+ *                     "dashboardToken":"sk_cdp_x9y8",
  *                     "origins":["https://lirin.co.kr","https://*.cafe24.com"],
  *                     "logo":"lirin.png"}}
  *

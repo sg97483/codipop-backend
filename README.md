@@ -200,7 +200,7 @@ iframe 안에서 `location` 을 바꾸면 몰 페이지는 그대로인 채 프�
 | `dashboardToken` (`sk_...`) | 사장님에게만 전달 | **예** | 그 몰의 리포트 조회 |
 
 ```bash
-TENANTS={"lirin":{"name":"리린","tier":"standard","apiKey":"pk_live_a1b2","dashboardToken":"sk_live_x9y8","origins":["https://lirin.co.kr","https://*.cafe24.com"],"logo":"lirin.png"}}
+TENANTS={"lirin":{"name":"리린","tier":"standard","apiKey":"pk_cdp_a1b2","dashboardToken":"sk_cdp_x9y8","origins":["https://lirin.co.kr","https://*.cafe24.com"],"logo":"lirin.png"}}
 ```
 
 | 필드 | 설명 |
@@ -211,6 +211,11 @@ TENANTS={"lirin":{"name":"리린","tier":"standard","apiKey":"pk_live_a1b2","das
 | `dashboardToken` | 리포트 조회 토큰. 없으면 마스터 토큰으로만 조회 가능 |
 | `origins` | 허용 도메인. `https://*.cafe24.com` 처럼 선두 와일드카드 지원 |
 | `logo` | `public/tenant-logos/` 안의 파일명. 워터마크에 쓰인다 |
+
+> **접두어는 `pk_cdp_` / `sk_cdp_` 를 쓰세요.** `sk_live_` 는 Stripe 시크릿 키와
+> 같은 형식이라 GitHub 푸시 보호와 각종 시크릿 탐지기가 오탐을 냅니다
+> (실제로 온보딩 문서 커밋이 이 이유로 차단됐습니다).
+> 코드는 형식을 검사하지 않으므로 이건 규칙일 뿐이지만, 지키지 않으면 운영 중에 성가십니다.
 
 **`apiKey` 는 페이지 소스에 노출되므로 보호 수단은 `origins` 뿐입니다.** 정식 계약 몰은
 반드시 채우세요. 비워 두면 통과시키는데, 파일럿 중 몰이 도메인을 바꿨다는 이유로
