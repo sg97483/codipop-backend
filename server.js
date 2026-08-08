@@ -21,7 +21,7 @@ const {
 const { applyBrandWatermark } = require('./watermark.js');
 const { fetchRemoteImage } = require('./remote-image.js');
 const { checkQuota, recordFitting, loadUsage, describeQuotaConfig } = require('./quota.js');
-const { resultPath, applyRetentionPolicy } = require('./storage-retention.js');
+const { resultPath, applyRetentionPolicy, retentionStatus } = require('./storage-retention.js');
 const fs = require('fs');
 
 /**
@@ -151,11 +151,32 @@ function loadTenantLogo(tenant) {
 app.use(express.json());
 
 // 기본 라우트 (서버 상태 확인용)
+//
+// 배포가 반영됐는지, 설정이 걸렸는지를 Render 로그를 열지 않고 확인하기 위한 창구다.
+// **값이 아니라 상태만 노출한다** — 키·토큰은 물론이고 고객사 이름(=우리 고객 목록)도
+// 담지 않는다. 이 주소는 누구나 열 수 있다.
 app.get('/', (req, res) => {
+  const tenants = describeTenantConfig();
+  const quota = describeQuotaConfig();
+
   res.json({
     success: true,
     message: 'CodiPOP Backend Server is running!',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    // Render 가 주입하는 배포 커밋. 푸시한 커밋이 실제로 떴는지 여기서 확인한다.
+    commit: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null,
+    config: {
+      // 몇 곳인지만. mallIds 는 우리 고객 목록이라 공개하지 않는다.
+      tenants: tenants.tenants,
+      tenantsWithOriginAllowlist: tenants.withOriginAllowlist,
+      tenantsWithDashboardToken: tenants.withDashboardToken,
+      // 설정 여부만 (값은 절대 노출하지 않는다)
+      statsTokenSet: Boolean(process.env.STATS_TOKEN),
+      geminiKeySet: Boolean(process.env.GEMINI_API_KEY),
+      quotaIpHourlyLimit: quota.ipHourlyLimit,
+      quotaHardCapMultiplier: quota.hardCapMultiplier,
+      retention: retentionStatus(),
+    },
   });
 });
 

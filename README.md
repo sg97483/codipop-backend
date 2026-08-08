@@ -25,7 +25,7 @@ node server.js        # 기본 포트 3000
 
 | 메서드 | 경로 | 용도 |
 |---|---|---|
-| GET | `/` | 헬스체크 |
+| GET | `/` | 헬스체크 + **배포 커밋·설정 상태** (로그를 열지 않고 배포 확인용) |
 | POST | `/try-on` | **가상 착장 합성** (multipart). 한도 초과 시 429 |
 | POST | `/analyze-clothing` | 의류 카테고리·상품명 자동 분류 (비전) |
 | POST | `/get-recommendation` | 코디 추천 (※ 프롬프트가 하드코딩되어 사실상 데모 수준) |
@@ -38,6 +38,31 @@ node server.js        # 기본 포트 3000
 | GET | `/widget/example.html` | **연동 예시 페이지 (고객사 전달용)** |
 | GET | `/demo/` | 파일럿 몰 제휴용 웹 데모 |
 | GET | `/app-ads.txt` | AdMob 퍼블리셔 인증 |
+
+### GET / (배포 확인)
+
+푸시한 커밋이 실제로 떴는지, 환경변수가 걸렸는지를 Render 로그를 열지 않고 확인합니다.
+
+```json
+{
+  "success": true,
+  "commit": "b5e9333",
+  "config": {
+    "tenants": 1,
+    "tenantsWithOriginAllowlist": 0,
+    "tenantsWithDashboardToken": 0,
+    "statsTokenSet": false,
+    "geminiKeySet": true,
+    "quotaIpHourlyLimit": 60,
+    "quotaHardCapMultiplier": 3,
+    "retention": { "applied": true, "reason": null, "days": 90 }
+  }
+}
+```
+
+> **값이 아니라 상태만 담습니다.** 키·토큰은 `Set: true/false` 로만 나오고,
+> 고객사 이름(= 우리 고객 목록)과 오류 상세(서버 경로가 섞임)는 담지 않습니다.
+> 이 주소는 누구나 열 수 있으므로 필드를 추가할 때 이 원칙을 지키세요.
 
 ### POST /try-on
 

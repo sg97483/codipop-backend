@@ -48,10 +48,28 @@ function resultPath(mallId) {
  * **접두어를 반드시 지정합니다.** 접두어 없는 규칙은 버킷 전체를 지우며,
  * 이 버킷에는 앱 사용자의 옷장 이미지도 들어 있습니다.
  */
+// 마지막 적용 결과. 헬스체크가 읽어 배포 상태를 확인할 수 있게 남긴다
+// (Render 로그를 열지 않고도 정책이 걸렸는지 알기 위해).
+let lastResult = { applied: false, reason: 'PENDING' };
+
+/**
+ * 헬스체크용 요약.
+ * 원인 메시지는 서버 경로 같은 내부 정보를 담으므로 **로그에만** 남기고
+ * 공개 응답에는 코드만 내보낸다. 상세는 Render 로그에서 본다.
+ */
+function retentionStatus() {
+  return {
+    applied: lastResult.applied,
+    reason: lastResult.reason || null,
+    days: RETENTION_DAYS || null,
+  };
+}
+
 async function applyRetentionPolicy(bucket) {
   if (!RETENTION_DAYS) {
     console.log('결과 이미지 보관 정책: 미설정 (STORAGE_LIFECYCLE_DAYS 로 일수를 지정하세요)');
-    return { applied: false, reason: 'DISABLED' };
+    lastResult = { applied: false, reason: 'DISABLED' };
+    return lastResult;
   }
 
   const rule = {
@@ -76,12 +94,21 @@ async function applyRetentionPolicy(bucket) {
       `결과 이미지 보관 정책 적용: ${WIDGET_PREFIX} ${RETENTION_DAYS}일 후 삭제 ` +
         `(기존 규칙 ${others.length}건 유지, 앱 결과 ${APP_PREFIX} 는 대상 아님)`,
     );
-    return { applied: true, days: RETENTION_DAYS };
+    lastResult = { applied: true, keptOtherRules: others.length };
+    return lastResult;
   } catch (error) {
     // 정책 적용 실패가 서비스를 막으면 안 된다. 권한 문제면 로그로만 알린다.
     console.error(`⚠️  보관 정책 적용 실패: ${error.message}`);
-    return { applied: false, reason: 'ERROR', message: error.message };
+    lastResult = { applied: false, reason: 'ERROR', message: error.message };
+    return lastResult;
   }
 }
 
-module.exports = { resultPath, applyRetentionPolicy, RETENTION_DAYS, APP_PREFIX, WIDGET_PREFIX };
+module.exports = {
+  resultPath,
+  applyRetentionPolicy,
+  retentionStatus,
+  RETENTION_DAYS,
+  APP_PREFIX,
+  WIDGET_PREFIX,
+};
