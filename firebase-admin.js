@@ -18,7 +18,7 @@ if (process.env.GOOGLE_CREDENTIALS) {
     // 기본 Firebase 앱 초기화 (환경 변수 사용)
     try {
       admin.initializeApp({
-        projectId: 'codipop-6d2c0d' // 프로젝트 ID 명시적 설정
+        projectId: 'codipop-63c0d' // 프로젝트 ID 명시적 설정
       });
     } catch (error) {
       console.error('Firebase 초기화 실패:', error.message);
@@ -31,7 +31,7 @@ if (process.env.GOOGLE_CREDENTIALS) {
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  projectId: 'codipop-6d2c0d' // Firebase 프로젝트 ID 명시적 설정
+  projectId: 'codipop-63c0d' // Firebase 프로젝트 ID 명시적 설정
 });
 
 const firestore = admin.firestore();

@@ -1,0 +1,22 @@
+{
+  "_comment": "analytics.js getMallStats() 가 사용하는 복합 색인. 배포: firebase deploy --only firestore:indexes",
+  "indexes": [
+    {
+      "collectionGroup": "fittingEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "mallId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "conversionEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "mallId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

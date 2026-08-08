@@ -1,8 +1,50 @@
-const TRY_ON_API =
+const API_ORIGIN =
   window.location.hostname.includes("onrender.com") ||
   window.location.hostname.includes("codipop")
-    ? `${window.location.origin}/try-on`
-    : "https://codipop-backend.onrender.com/try-on";
+    ? window.location.origin
+    : "https://codipop-backend.onrender.com";
+
+const TRY_ON_API = `${API_ORIGIN}/try-on`;
+const EVENTS_API = `${API_ORIGIN}/events`;
+
+const MALL_ID = "demo-mall";
+
+// 방문자 1명을 식별하는 값. 피팅 → 구매 클릭을 이어 붙여 전환율을 계산한다.
+function getSessionId() {
+  let id = sessionStorage.getItem("codipop_session");
+  if (!id) {
+    id = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem("codipop_session", id);
+  }
+  return id;
+}
+
+const SESSION_ID = getSessionId();
+
+// 수집 실패가 사용자 동작을 막으면 안 되므로 전부 fire-and-forget.
+function sendEvent(type, extra = {}) {
+  const payload = JSON.stringify({
+    type,
+    mallId: MALL_ID,
+    sessionId: SESSION_ID,
+    ...extra,
+  });
+  try {
+    // 페이지를 떠나는 순간(구매 클릭)에도 유실되지 않도록 sendBeacon 우선
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(EVENTS_API, new Blob([payload], { type: "application/json" }));
+      return;
+    }
+  } catch (_) {
+    /* sendBeacon 미지원 → fetch 로 폴백 */
+  }
+  fetch(EVENTS_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: payload,
+    keepalive: true,
+  }).catch(() => {});
+}
 
 const PRODUCTS = [
   {
@@ -49,6 +91,7 @@ const state = {
   personPreviewUrl: null,
   resultUrl: null,
   elapsedTimer: null,
+  fittingEventId: null,
 };
 
 const els = {
@@ -159,10 +202,16 @@ function openTryOn() {
   renderTryOn();
   showView("tryon");
   history.replaceState(null, "", `#tryon/${state.productId}`);
+  sendEvent("widget_open", { productId: state.productId });
 }
 
 function goBuy() {
   const product = getProduct();
+  sendEvent("buy_click", {
+    productId: product.id,
+    productPrice: product.price,
+    fittingEventId: state.fittingEventId,
+  });
   const url = productBuyUrl(product);
   if (url.startsWith("http")) {
     window.location.href = url;
@@ -197,8 +246,10 @@ async function startFitting() {
     formData.append("person", state.personFile, state.personFile.name || "person.jpg");
     formData.append("clothing", clothingFile, clothingFile.name);
     formData.append("clothing_count", "1");
-    formData.append("mallId", "demo-mall");
+    formData.append("mallId", MALL_ID);
     formData.append("productId", product.id);
+    formData.append("sessionId", SESSION_ID);
+    sendEvent("fitting_start", { productId: product.id });
 
     const response = await fetch(TRY_ON_API, {
       method: "POST",
@@ -213,11 +264,16 @@ async function startFitting() {
     }
 
     state.resultUrl = data.imageUrl;
+    state.fittingEventId = data.fittingEventId || null;
     els.resultBefore.src = state.personPreviewUrl;
     els.resultAfter.src = data.imageUrl;
     els.loadingPanel.classList.add("hidden");
     els.resultPanel.classList.remove("hidden");
     history.replaceState(null, "", `#result/${product.id}`);
+    sendEvent("result_view", {
+      productId: product.id,
+      fittingEventId: state.fittingEventId,
+    });
   } catch (error) {
     clearInterval(state.elapsedTimer);
     els.loadingPanel.classList.add("hidden");
@@ -256,7 +312,10 @@ function bindEvents() {
     alert("데모: 장바구니 동작은 몰 쪽 기능입니다.");
   });
   document.getElementById("btn-buy-result").addEventListener("click", goBuy);
-  document.getElementById("btn-retry").addEventListener("click", openTryOn);
+  document.getElementById("btn-retry").addEventListener("click", () => {
+    sendEvent("retry", { productId: state.productId });
+    openTryOn();
+  });
   document.getElementById("btn-start-fit").addEventListener("click", startFitting);
 
   els.personInput.addEventListener("change", () => {

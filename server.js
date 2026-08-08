@@ -7,6 +7,7 @@ const { GoogleGenAI } = require('@google/genai');
 const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 const { firestore } = require('./firebase-admin.js');
+const { logFittingEvent, logConversionEvent, getMallStats } = require('./analytics.js');
 
 // --- 설정 ---
 const app = express();
@@ -123,6 +124,26 @@ app.post('/try-on', upload.any(), async (req, res) => {
   console.log(`[${requestId}] 이미지 처리 요청 받음 (다중 옷 이미지)...`);
   console.log(`[${requestId}] 요청 헤더:`, JSON.stringify(req.headers, null, 2));
 
+  // 로깅용 컨텍스트 (실패 경로에서도 남겨야 하므로 try 밖에서 선언)
+  let geminiMs = null;
+  let usageMetadata = null;
+  let clothingCount = 0;
+  let hasBodySizeFlag = false;
+
+  const logFailure = (message) =>
+    logFittingEvent({
+      requestId,
+      body: req.body,
+      status: 'failed',
+      errorMessage: message,
+      model: IMAGE_MODEL,
+      clothingCount,
+      hasBodySize: hasBodySizeFlag,
+      usage: usageMetadata,
+      geminiMs,
+      elapsedMs: Date.now() - requestId,
+    });
+
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: '이미지 파일이 필요합니다.' });
@@ -152,6 +173,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
     }
 
     console.log(`[${requestId}] 처리할 이미지: 사람 1개, 옷 ${allClothingFiles.length}개`);
+    clothingCount = allClothingFiles.length;
 
     const heightCm = Number(req.body?.heightCm);
     const weightKg = Number(req.body?.weightKg);
@@ -164,6 +186,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
       weightKg >= 30 &&
       weightKg <= 200;
 
+    hasBodySizeFlag = hasBodySize;
     if (hasBodySize) {
       console.log(`[${requestId}] 체형 정보 반영: ${heightCm}cm / ${weightKg}kg / usual=${usualSize || 'n/a'}`);
     }
@@ -228,11 +251,13 @@ app.post('/try-on', upload.any(), async (req, res) => {
         temperature: 0.2,
       },
     });
-    console.log(`[${requestId}] Gemini API 호출 완료 (${Date.now() - geminiStart}ms)`);
+    geminiMs = Date.now() - geminiStart;
+    console.log(`[${requestId}] Gemini API 호출 완료 (${geminiMs}ms)`);
 
     // 토큰 사용량 로그 추가
     if (response && response.usageMetadata) {
       const usage = response.usageMetadata;
+      usageMetadata = usage;
       console.log(`[${requestId}] 이미지 합성 토큰 사용량:`, {
         personImage: '1개',
         clothingImages: `${allClothingFiles.length}개`,
@@ -253,12 +278,14 @@ app.post('/try-on', upload.any(), async (req, res) => {
     const candidates = response?.candidates;
     if (!candidates || candidates.length === 0) {
       console.error(`[${requestId}] Gemini 응답에 candidates가 없습니다.`);
+      logFailure('NO_CANDIDATES');
       return res.status(500).json({ success: false, message: 'Gemini API가 응답을 생성하지 못했습니다.' });
     }
 
     const content = candidates[0]?.content;
     if (!content || !content.parts || content.parts.length === 0) {
       console.error(`[${requestId}] Gemini 응답에 content.parts가 없습니다.`);
+      logFailure('NO_CONTENT_PARTS');
       return res.status(500).json({ success: false, message: 'Gemini API가 이미지를 생성하지 못했습니다.' });
     }
 
@@ -274,6 +301,7 @@ app.post('/try-on', upload.any(), async (req, res) => {
     if (!generatedImageBase64) {
       console.error(`[${requestId}] Gemini 응답에서 이미지 데이터를 찾을 수 없습니다.`);
       console.error(`[${requestId}] 응답 구조:`, JSON.stringify(content.parts, null, 2));
+      logFailure('NO_IMAGE_DATA');
       return res.status(500).json({ success: false, message: '생성된 이미지를 찾을 수 없습니다.' });
     }
     const generatedImageBuffer = Buffer.from(generatedImageBase64, 'base64');
@@ -309,10 +337,28 @@ app.post('/try-on', upload.any(), async (req, res) => {
       responseData.warning = "원본 이미지 보존을 위해 옷 아이템을 최대 2개까지만 처리했습니다.";
     }
 
+    // 이벤트 ID 를 함께 내려주면 클라이언트가 '구매 클릭'을 이 피팅에 연결할 수 있다.
+    const fittingEventId = await logFittingEvent({
+      requestId,
+      body: req.body,
+      status: 'success',
+      model: IMAGE_MODEL,
+      clothingCount,
+      hasBodySize: hasBodySizeFlag,
+      resultImageUrl: publicUrl,
+      usage: usageMetadata,
+      geminiMs,
+      elapsedMs: Date.now() - requestId,
+    });
+    if (fittingEventId) {
+      responseData.fittingEventId = fittingEventId;
+    }
+
     res.json(responseData);
 
   } catch (error) {
     console.error(`[${requestId}] 서버 에러:`, error);
+    logFailure(error?.message || 'UNKNOWN_ERROR');
     res.status(500).json({ success: false, message: '이미지 처리 중 서버 내부 오류가 발생했습니다.' });
   }
 });
@@ -428,6 +474,46 @@ app.post('/get-recommendation', async (req, res) => {
   } catch (error) {
     console.error('추천 생성 중 에러:', error);
     res.status(500).json({ success: false, message: '추천을 생성하는 중 오류가 발생했습니다.' });
+  }
+});
+
+// 위젯 상호작용 / 구매 클릭 수집
+// 피팅 이벤트와 이어 붙여 "피팅 후 구매 전환율"을 계산하는 분자가 된다.
+app.post('/events', async (req, res) => {
+  const result = await logConversionEvent(req.body);
+  if (!result.ok && result.reason === 'INVALID_TYPE') {
+    return res.status(400).json({ success: false, message: '허용되지 않은 이벤트 타입입니다.' });
+  }
+  // 수집 실패해도 클라이언트 동작을 막지 않는다 (구매 클릭은 계속 진행되어야 함)
+  res.json({ success: result.ok });
+});
+
+// 몰별 통계 (MD 대시보드 / 파일럿 리포트 데이터 소스)
+app.get('/stats/:mallId', async (req, res) => {
+  const mallId = String(req.params.mallId || '').slice(0, 60);
+  const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+  // 표본이 적은 파일럿 초기에는 minFittings=1 로 낮춰서 볼 수 있다.
+  const minFittings = Math.min(Math.max(parseInt(req.query.minFittings, 10) || 2, 1), 100);
+
+  // 임시 보호: 정식 대시보드 전까지 토큰을 아는 사람만 조회 가능
+  if (process.env.STATS_TOKEN && req.query.token !== process.env.STATS_TOKEN) {
+    return res.status(401).json({ success: false, message: '인증이 필요합니다.' });
+  }
+
+  try {
+    const stats = await getMallStats(mallId, days, minFittings);
+    res.json({ success: true, stats });
+  } catch (error) {
+    console.error('통계 조회 실패:', error.message);
+    // 복합 색인이 없으면 Firestore 가 생성 URL을 에러 메시지에 담아준다.
+    if (error.message && error.message.includes('index')) {
+      return res.status(500).json({
+        success: false,
+        message: 'Firestore 복합 색인이 필요합니다. 서버 로그의 생성 링크를 확인하세요.',
+        detail: error.message,
+      });
+    }
+    res.status(500).json({ success: false, message: '통계를 조회하지 못했습니다.' });
   }
 });
 
