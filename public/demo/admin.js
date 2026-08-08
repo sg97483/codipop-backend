@@ -22,6 +22,7 @@ const els = {
   days: document.getElementById("f-days"),
   min: document.getElementById("f-min"),
   token: document.getElementById("f-token"),
+  remember: document.getElementById("f-remember"),
   btn: document.getElementById("btn-load"),
   signout: document.getElementById("btn-signout"),
   status: document.getElementById("status"),
@@ -31,16 +32,26 @@ const els = {
   footMeta: document.getElementById("foot-meta"),
 };
 
-// 조회 토큰은 이 브라우저의 탭 세션에만 둔다.
-// localStorage 에 두면 공용 PC 에서 다음 사람이 그대로 열 수 있다.
+// 조회 토큰 보관 위치는 사장님이 정한다.
+//   기본     탭을 닫으면 사라짐 (sessionStorage) — 매장 공용 PC 대비
+//   기억 체크 브라우저에 남음 (localStorage) — 본인 사무실 PC 용
 const TOKEN_KEY = "codipop_stats_token";
+
 const readToken = () => {
-  try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; }
-};
-const writeToken = (value) => {
   try {
-    if (value) sessionStorage.setItem(TOKEN_KEY, value);
-    else sessionStorage.removeItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || "";
+  } catch (e) {
+    return "";
+  }
+};
+
+const writeToken = (value, remember) => {
+  try {
+    // 어느 쪽에 남아 있든 먼저 지운다. 안 그러면 '기억 해제'가 동작하지 않는다.
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    if (!value) return;
+    (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, value);
   } catch (e) { /* 저장 실패해도 이번 조회는 된다 */ }
 };
 
@@ -95,6 +106,55 @@ function renderTable(id, rows, emptyText) {
     return;
   }
   tbody.innerHTML = rows.join("");
+}
+
+/**
+ * 이번 달 사용량.
+ *
+ * 기본 제공량을 넘겨도 **막히지 않는다**는 점을 화면에서 분명히 한다 —
+ * 사장님이 "한도 초과=서비스 중단"으로 오해하면 이벤트 기간에 위젯을 내려버린다.
+ * 초과분은 차단이 아니라 후청구다.
+ */
+function renderUsage(usage) {
+  const card = document.getElementById("usage-card");
+  if (!usage) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+
+  document.getElementById("usage-plan").textContent =
+    `${usage.plan} 요금제 · ${usage.month}`;
+  document.getElementById("usage-used").textContent = `${num(usage.used)}회`;
+  document.getElementById("usage-of").textContent = usage.included
+    ? `기본 제공 ${num(usage.included)}회 중`
+    : "제공량 협의";
+
+  const pct = usage.usedPercent === null ? 0 : Math.min(100, usage.usedPercent);
+  const fill = document.getElementById("usage-fill");
+  fill.style.width = `${pct}%`;
+  fill.classList.toggle("over", usage.overage > 0);
+  document
+    .getElementById("usage-bar-wrap")
+    .setAttribute(
+      "aria-label",
+      usage.included
+        ? `기본 제공 ${usage.included}회 중 ${usage.used}회 사용 (${pct}%)`
+        : `${usage.used}회 사용`,
+    );
+
+  let note;
+  if (usage.overage > 0) {
+    note =
+      `기본 제공량을 ${num(usage.overage)}회 초과했습니다. ` +
+      `서비스는 계속 이용하실 수 있으며, 초과분 ${won(usage.overageKrw)}이 다음 청구서에 반영됩니다.`;
+  } else if (usage.included) {
+    note = `남은 기본 제공량 ${num(usage.remaining)}회. 초과해도 중단되지 않으며 초과분만 후청구됩니다.`;
+  } else {
+    note = "제공량이 계약으로 정해진 요금제입니다.";
+  }
+  if (!usage.seeded) note += " (집계 준비 중이라 실제보다 적게 보일 수 있습니다)";
+  document.getElementById("usage-note").textContent = note;
 }
 
 function render(stats) {
@@ -231,7 +291,7 @@ async function load(event) {
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
-      writeToken("");
+      writeToken("", false);
       showSignedIn(false);
       throw new Error("조회 토큰이 올바르지 않습니다. 다시 입력해 주세요.");
     }
@@ -240,6 +300,7 @@ async function load(event) {
     }
 
     showSignedIn(true);
+    renderUsage(data.usage);
     render(data.stats);
     els.report.classList.remove("hidden");
     if (data.mallName) {
@@ -261,13 +322,13 @@ els.form.addEventListener("submit", load);
 
 els.signin.addEventListener("submit", (event) => {
   event.preventDefault();
-  writeToken(els.token.value.trim());
+  writeToken(els.token.value.trim(), els.remember.checked);
   els.token.value = "";
   load();
 });
 
 els.signout.addEventListener("click", () => {
-  writeToken("");
+  writeToken("", false);
   showSignedIn(false);
   setStatus("로그아웃되었습니다. 조회 토큰을 입력해 주세요.");
 });

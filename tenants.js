@@ -29,6 +29,7 @@ const DEMO_TENANT = {
   mallId: 'demo-mall',
   name: 'DEMO MALL',
   tier: 'standard',
+  plan: 'starter',
   apiKey: 'pk_demo_mall',
   dashboardToken: '',
   origins: [], // 비어 있으면 모든 origin 허용 (데모라서 어디서든 붙여볼 수 있어야 한다)
@@ -66,6 +67,12 @@ function loadTenants() {
       mallId: id,
       name: safeStr(raw?.name, 40) || id,
       tier,
+      // 요금제(수량)는 등급(화질)과 다른 축이다. quota.js 가 해석한다.
+      plan: safeStr(raw?.plan, 20) || 'starter',
+      includedFittings: Number.isFinite(Number(raw?.includedFittings))
+        ? Number(raw.includedFittings)
+        : undefined,
+      hardCap: Number.isFinite(Number(raw?.hardCap)) ? Number(raw.hardCap) : undefined,
       apiKey: safeStr(raw?.apiKey, 80),
       dashboardToken: safeStr(raw?.dashboardToken, 80),
       origins: Array.isArray(raw?.origins) ? raw.origins.map((o) => safeStr(o, 200)).filter(Boolean) : [],
@@ -240,6 +247,7 @@ function publicTenantInfo(tenant) {
     mallId: tenant.mallId,
     mallName: tenant.name,
     tier: tenant.tier,
+    plan: tenant.plan,
     hasLogo: Boolean(tenant.logo),
   };
 }

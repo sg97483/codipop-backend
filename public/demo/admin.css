@@ -178,12 +178,76 @@ html, body {
   font-size: 14px;
 }
 
+/* `.signin label` (0,1,1) 이 세로 배치이므로 같은 특정도 이상으로 되돌린다 */
+.signin label.signin-remember {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 11px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.signin label.signin-remember input {
+  width: 16px;
+  height: 16px;
+  min-width: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
 .signin-note {
   flex: 1 1 100%;
   margin: 2px 0 0;
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ── 이번 달 사용량 ───────────────────────────────── */
+.usage {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.usage-nums { flex: 0 0 auto; }
+
+.usage-value {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.usage-label { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+
+.usage-bar {
+  flex: 1 1 200px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--grid);
+  overflow: hidden;
+}
+
+.usage-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--series-fitted);
+  /* 0% 여도 막대가 있다는 것이 보이도록 최소 폭을 준다 */
+  min-width: 3px;
+  transition: width 0.3s ease;
+}
+
+/* 초과 구간은 색으로도 구분한다. 다만 색만으로 뜻이 전달되지 않도록
+   아래 안내 문구가 초과 사실과 금액을 항상 함께 적는다. */
+.usage-fill.over { background: var(--series-missed); }
 
 .btn-ghost {
   padding: 10px 14px;

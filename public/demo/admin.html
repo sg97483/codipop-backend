@@ -40,8 +40,13 @@
           />
         </label>
         <button type="submit" class="btn-primary">리포트 열기</button>
+        <label class="signin-remember">
+          <input type="checkbox" id="f-remember" />
+          <span>이 브라우저에 기억</span>
+        </label>
         <p class="signin-note">
-          토큰은 이 브라우저에만 저장되며 서버로 전송되는 것 외에 다른 곳에 남지 않습니다.
+          체크하면 다음에 다시 입력하지 않아도 됩니다.
+          <strong>매장 공용 PC 라면 체크하지 마세요</strong> — 다음 사람이 그대로 리포트를 열 수 있습니다.
         </p>
       </form>
 
@@ -152,10 +157,28 @@
           </section>
         </div>
 
+        <!-- 이번 달 사용량 -->
+        <section class="card" id="usage-card">
+          <div class="card-head">
+            <h2>이번 달 사용량</h2>
+            <p id="usage-plan">—</p>
+          </div>
+          <div class="usage">
+            <div class="usage-nums">
+              <p class="usage-value" id="usage-used">—</p>
+              <p class="usage-label" id="usage-of">—</p>
+            </div>
+            <div class="usage-bar" role="img" aria-label="이번 달 사용량" id="usage-bar-wrap">
+              <div class="usage-fill" id="usage-fill"></div>
+            </div>
+          </div>
+          <p class="foot-note" id="usage-note"></p>
+        </section>
+
         <!-- 청구 근거 -->
         <section class="card">
           <div class="card-head">
-            <h2>사용량 및 청구 근거</h2>
+            <h2>기간별 사용 내역 및 청구 근거</h2>
             <p>성공한 피팅만 과금 대상입니다. 실패 건은 청구되지 않습니다.</p>
           </div>
           <div class="table-wrap">

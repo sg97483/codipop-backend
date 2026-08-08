@@ -20,7 +20,21 @@ const {
 } = require('./tenants.js');
 const { applyBrandWatermark } = require('./watermark.js');
 const { fetchRemoteImage } = require('./remote-image.js');
+const { checkQuota, recordFitting, describeUsage, describeQuotaConfig } = require('./quota.js');
 const fs = require('fs');
+
+/**
+ * 클라이언트 IP.
+ * Render 는 프록시 뒤에 있어 req.ip 가 내부 주소로 잡힌다. X-Forwarded-For 의
+ * 첫 번째 값이 실제 방문자다 (뒤쪽은 프록시가 덧붙인 것이라 신뢰할 수 없다).
+ */
+function clientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length) {
+    return forwarded.split(',')[0].trim().slice(0, 60);
+  }
+  return (req.ip || req.socket?.remoteAddress || '').slice(0, 60);
+}
 
 // --- 설정 ---
 const app = express();
@@ -47,6 +61,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 //    고객사별 매핑은 환경변수 TENANT_TIERS 로 지정한다.
 console.log('합성 엔진 등급 설정:', JSON.stringify(describeTierConfig()));
 console.log('고객사(테넌트) 설정:', JSON.stringify(describeTenantConfig()));
+console.log('호출 한도 설정:', JSON.stringify(describeQuotaConfig()));
 
 // 2. 텍스트 생성용 모델 (구 gemini-1.5-flash-latest 대체, 더 저렴하고 빠름)
 const TEXT_MODEL = process.env.TEXT_MODEL || 'gemini-2.5-flash-lite';
@@ -208,6 +223,18 @@ app.post('/try-on', upload.any(), async (req, res) => {
 
   // 요금제 등급 결정. 미등록 몰은 항상 스탠다드로 떨어진다.
   const tier = auth.tier;
+
+  // 호출 한도. **Gemini 를 부르기 전에** 판정한다 — 돈이 나간 뒤에 막으면 의미가 없다.
+  const quota = await checkQuota({
+    tenant: auth.tenant,
+    mallId: auth.mallId,
+    ip: clientIp(req),
+  });
+  if (!quota.ok) {
+    console.warn(`[${requestId}] 한도 차단: ${quota.code} mall=${auth.mallId || '-'}`);
+    if (quota.retryAfterSec) res.set('Retry-After', String(quota.retryAfterSec));
+    return res.status(429).json({ success: false, code: quota.code, message: quota.message });
+  }
 
   // 로깅용 컨텍스트 (실패 경로에서도 남겨야 하므로 try 밖에서 선언)
   let geminiMs = null;
@@ -481,6 +508,9 @@ app.post('/try-on', upload.any(), async (req, res) => {
       responseData.warning = "원본 이미지 보존을 위해 옷 아이템을 최대 2개까지만 처리했습니다.";
     }
 
+    // 한도 카운터는 성공한 건만 센다 — 실패는 청구하지 않으므로 한도에서도 빼 준다.
+    recordFitting(auth.mallId, true);
+
     // 이벤트 ID 를 함께 내려주면 클라이언트가 '구매 클릭'을 이 피팅에 연결할 수 있다.
     const fittingEventId = await logFittingEvent({
       requestId,
@@ -681,11 +711,14 @@ app.get('/my/stats', async (req, res) => {
   }
 
   try {
+    const target = getTenant(mallId);
     const stats = await getMallStats(mallId, days, minFittings);
     res.json({
       success: true,
       role,
-      mallName: (getTenant(mallId) || {}).name || mallId,
+      mallName: (target || {}).name || mallId,
+      // 이번 달 사용량은 조회 기간(days)과 무관하다 — 청구는 항상 월 단위다.
+      usage: describeUsage(mallId, target),
       stats,
     });
   } catch (error) {
@@ -710,7 +743,7 @@ app.get('/stats/:mallId', async (req, res) => {
 
   try {
     const stats = await getMallStats(mallId, days, minFittings);
-    res.json({ success: true, stats });
+    res.json({ success: true, usage: describeUsage(mallId, getTenant(mallId)), stats });
   } catch (error) {
     console.error('통계 조회 실패:', error.message);
     // 복합 색인이 없으면 Firestore 가 생성 URL을 에러 메시지에 담아준다.
