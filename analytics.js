@@ -49,6 +49,7 @@ const CONVERSION_TYPES = new Set([
   'retry', // 다른 사진으로 다시 피팅
   'save_image', // 결과 이미지 저장
   'share', // SNS 공유
+  'mixmatch_click', // 어울리는 상품 '함께 피팅' 클릭 ← 업셀링 지표
 ]);
 
 /**

@@ -9,6 +9,7 @@ const path = require('path');
 const { firestore } = require('./firebase-admin.js');
 const { logFittingEvent, logConversionEvent, getMallStats } = require('./analytics.js');
 const { resolveTier, describeTierConfig } = require('./tiers.js');
+const { applyBrandWatermark } = require('./watermark.js');
 
 // --- 설정 ---
 const app = express();
@@ -321,7 +322,17 @@ app.post('/try-on', upload.any(), async (req, res) => {
       logFailure('NO_IMAGE_DATA');
       return res.status(500).json({ success: false, message: '생성된 이미지를 찾을 수 없습니다.' });
     }
-    const generatedImageBuffer = Buffer.from(generatedImageBase64, 'base64');
+    let generatedImageBuffer = Buffer.from(generatedImageBase64, 'base64');
+
+    // 쇼핑몰 브랜드 워터마크 (mallName 을 보낸 요청에만 적용).
+    // 저장·공유된 이미지에 남아야 의미가 있으므로 업로드 전에 굽는다.
+    // B2C 앱은 자체 워터마크 컴포넌트를 쓰므로 mallName 을 보내지 않는다.
+    const mallName = typeof req.body?.mallName === 'string' ? req.body.mallName.trim().slice(0, 40) : '';
+    if (mallName) {
+      const wmStart = Date.now();
+      generatedImageBuffer = await applyBrandWatermark(generatedImageBuffer, mallName);
+      console.log(`[${requestId}] 워터마크 합성 완료: "${mallName}" (${Date.now() - wmStart}ms)`);
+    }
 
     const fileName = `results/${Date.now()}_result.jpeg`;
     const file = bucket.file(fileName);

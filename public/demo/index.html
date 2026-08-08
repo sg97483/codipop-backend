@@ -76,6 +76,10 @@
           <div class="tryon-card">
             <p class="card-label">이 상품</p>
             <img id="tryon-clothing" alt="상품" />
+            <div id="tryon-extra" class="tryon-extra hidden">
+              <span class="extra-tag">함께 피팅</span>
+              <img id="tryon-clothing2" alt="함께 피팅할 상품" />
+            </div>
           </div>
           <div class="tryon-card">
             <p class="card-label">내 사진</p>
@@ -93,6 +97,39 @@
             </div>
           </div>
         </div>
+
+        <!-- MY 사이즈 (선택) -->
+        <details class="size-box" id="size-box">
+          <summary>
+            <span>📏 내 사이즈 입력</span>
+            <em>선택 · 입력하면 추천 사이즈를 알려드려요</em>
+          </summary>
+          <div class="size-fields">
+            <label>
+              키 (cm)
+              <input type="number" id="input-height" inputmode="numeric"
+                     min="120" max="230" placeholder="172" />
+            </label>
+            <label>
+              몸무게 (kg)
+              <input type="number" id="input-weight" inputmode="numeric"
+                     min="30" max="200" placeholder="65" />
+            </label>
+            <label>
+              평소 사이즈
+              <select id="input-usual-size">
+                <option value="XS">XS</option>
+                <option value="S">S</option>
+                <option value="M" selected>M</option>
+                <option value="L">L</option>
+                <option value="XL">XL</option>
+                <option value="XXL">XXL</option>
+                <option value="XXL+">XXL 이상</option>
+              </select>
+            </label>
+          </div>
+          <p class="size-note">최초 1회만 입력하면 됩니다. 이 정보는 핏 표현과 사이즈 추천에만 쓰입니다.</p>
+        </details>
         <button type="button" class="btn-primary btn-block" id="btn-start-fit" disabled>
           AI 피팅 시작
         </button>
@@ -114,22 +151,41 @@
             ← 상품으로
           </button>
           <p class="codipop-mark">CodiPOP 피팅 결과</p>
-          <div class="result-compare">
-            <figure>
-              <img id="result-before" alt="원본" />
-              <figcaption>Before</figcaption>
-            </figure>
-            <figure>
-              <img id="result-after" alt="피팅 결과" />
-              <figcaption>After</figcaption>
-            </figure>
+
+          <!-- 결과: After 단독 노출 (Before 는 토글) -->
+          <div class="result-stage">
+            <img id="result-after" alt="피팅 결과" />
+            <img id="result-before" class="hidden" alt="원본" />
+            <button type="button" class="before-toggle" id="btn-before-toggle">
+              원본 보기
+            </button>
           </div>
+
+          <!-- 사이즈 추천 -->
+          <div id="size-result" class="size-result hidden">
+            <div class="size-badge"><span id="size-value">L</span></div>
+            <div class="size-copy">
+              <p id="size-reason"></p>
+              <p class="size-meta" id="size-meta"></p>
+            </div>
+          </div>
+
           <button type="button" class="btn-primary btn-block" id="btn-buy-result">
             이 상품 구매하기
           </button>
-          <button type="button" class="btn-secondary btn-block" id="btn-retry">
-            다른 사진으로 다시 피팅
-          </button>
+          <div class="result-actions">
+            <button type="button" class="btn-secondary" id="btn-save">이미지 저장</button>
+            <button type="button" class="btn-secondary" id="btn-share">공유하기</button>
+            <button type="button" class="btn-ghost" id="btn-retry">다시 피팅</button>
+          </div>
+
+          <!-- 믹스매치 업셀링 -->
+          <div id="mixmatch" class="mixmatch hidden">
+            <p class="mixmatch-title">이 상품과 어울리는 상품</p>
+            <div id="mixmatch-list" class="mixmatch-list"></div>
+            <p class="hint">함께 피팅하면 세트 착장을 한 번에 확인할 수 있어요.</p>
+          </div>
+
           <p class="hint center">
             구매하기를 누르면 <strong>몰 상품 페이지</strong>로 돌아갑니다.
           </p>
@@ -143,6 +199,7 @@
         </div>
       </section>
     </div>
+    <script src="./size-recommend.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

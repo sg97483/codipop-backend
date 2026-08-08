@@ -480,8 +480,250 @@ body {
   font-weight: 600;
 }
 
+/* ── 결과: After 단독 노출, Before 는 토글 ─────────────────── */
+.result-stage {
+  position: relative;
+  margin: 14px 0 12px;
+}
+
+.result-stage img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 16px;
+  background: #ece6da;
+  border: 1px solid var(--line);
+  display: block;
+}
+
+.before-toggle {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(23, 20, 17, 0.62);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+.before-toggle:hover {
+  background: rgba(23, 20, 17, 0.78);
+}
+
+/* ── MY 사이즈 입력 ────────────────────────────────────────── */
+.size-box {
+  margin: 14px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fffdf9;
+  padding: 12px 14px;
+}
+
+.size-box summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.size-box summary em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.size-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.size-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.size-fields input,
+.size-fields select {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  width: 100%;
+}
+
+.size-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ── 사이즈 추천 결과 ──────────────────────────────────────── */
+.size-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fffdf9, #f7f2e8);
+}
+
+.size-badge {
+  flex: 0 0 auto;
+  min-width: 52px;
+  height: 52px;
+  padding: 0 10px;
+  border-radius: 14px;
+  background: var(--codi);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.size-copy p {
+  margin: 0;
+}
+
+.size-copy #size-reason {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.size-meta {
+  margin-top: 4px !important;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ── 결과 액션 ─────────────────────────────────────────────── */
+.result-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.result-actions button {
+  width: 100%;
+}
+
+/* ── 믹스매치 업셀링 ───────────────────────────────────────── */
+.mixmatch {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.mixmatch-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.mixmatch-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mix-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px;
+  background: #fffdf9;
+}
+
+.mix-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #ece6da;
+  display: block;
+}
+
+.mix-title {
+  margin: 8px 0 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.mix-price {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mix-btn {
+  width: 100%;
+  padding: 8px 10px !important;
+  font-size: 12.5px !important;
+}
+
+/* ── 함께 피팅할 두 번째 상품 ──────────────────────────────── */
+.tryon-extra {
+  margin-top: 8px;
+  position: relative;
+}
+
+.tryon-extra img {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  display: block;
+}
+
+.extra-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--codi);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
 .hidden {
   display: none !important;
+}
+
+@media (max-width: 380px) {
+  .size-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .result-actions {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (min-width: 520px) {

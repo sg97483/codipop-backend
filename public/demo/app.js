@@ -8,6 +8,8 @@ const TRY_ON_API = `${API_ORIGIN}/try-on`;
 const EVENTS_API = `${API_ORIGIN}/events`;
 
 const MALL_ID = "demo-mall";
+// 결과 이미지에 새길 브랜드명. 제휴 몰에 붙일 때 실제 몰 이름으로 바꾸면 된다.
+const MALL_NAME = "DEMO MALL";
 
 // 방문자 1명을 식별하는 값. 피팅 → 구매 클릭을 이어 붙여 전환율을 계산한다.
 function getSessionId() {
@@ -55,6 +57,7 @@ const PRODUCTS = [
     priceLabel: "₩89,000",
     desc: "비대칭 헴라인의 데일리 티셔츠. 상세의 착용해 보기로 내 핏을 바로 확인하세요.",
     category: "TOPS",
+    productSize: "M", // 상품 표기 사이즈 — 내 추천과 비교해 보여준다
     image: "./assets/top.jpg",
     buyUrl: null,
   },
@@ -66,6 +69,7 @@ const PRODUCTS = [
     priceLabel: "₩128,000",
     desc: "여유 있는 실루엣의 데님. 피팅 후 바로 구매 페이지로 돌아올 수 있습니다.",
     category: "BOTTOMS",
+    productSize: "L",
     image: "./assets/bottom.jpg",
     buyUrl: null,
   },
@@ -77,10 +81,26 @@ const PRODUCTS = [
     priceLabel: "₩249,000",
     desc: "시즌 아우터. 영세몰 상세에 붙는 위젯 데모용 샘플 상품입니다.",
     category: "OUTER",
+    productSize: "M",
     image: "./assets/outer.jpg",
     buyUrl: null,
   },
 ];
+
+// 믹스매치 규칙 — AI 호출 없이 카테고리만으로 조합을 제안한다 (추가 비용 0원).
+// 기획서 슬라이드 13의 "하의를 보러 온 고객에게 상의까지 세트 판매" 시연용.
+const MIX_MATCH_RULES = {
+  TOPS: ["BOTTOMS", "OUTER"],
+  BOTTOMS: ["TOPS", "OUTER"],
+  OUTER: ["TOPS", "BOTTOMS"],
+};
+
+function getMixMatches(product) {
+  const wanted = MIX_MATCH_RULES[product.category] || [];
+  return wanted
+    .map((cat) => PRODUCTS.find((p) => p.category === cat && p.id !== product.id))
+    .filter(Boolean);
+}
 
 const SAMPLE_PERSON = "./assets/sample-person.jpg";
 
@@ -92,7 +112,39 @@ const state = {
   resultUrl: null,
   elapsedTimer: null,
   fittingEventId: null,
+  partnerId: null,     // 함께 피팅할 두 번째 상품
+  showBefore: false,
 };
+
+// ── MY 사이즈 (브라우저에 1회 저장) ──────────────────────────
+const BODY_KEY = "codipop_body_size";
+
+function loadBodySize() {
+  try {
+    const raw = localStorage.getItem(BODY_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return window.CodiPopSize.isValidBodySize(parsed) ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveBodySize(profile) {
+  try {
+    localStorage.setItem(BODY_KEY, JSON.stringify(profile));
+  } catch (_) {
+    /* 저장 실패해도 이번 세션에서는 동작한다 */
+  }
+}
+
+/** 입력창에서 현재 값을 읽어 유효하면 반환한다. */
+function readBodySizeInput() {
+  const heightCm = Number(els.inputHeight.value);
+  const weightKg = Number(els.inputWeight.value);
+  const usualSize = els.inputUsualSize.value;
+  const profile = { heightCm, weightKg, usualSize };
+  return window.CodiPopSize.isValidBodySize(profile) ? profile : null;
+}
 
 const els = {
   views: {
@@ -108,6 +160,8 @@ const els = {
   productPrice: document.getElementById("product-price"),
   productDesc: document.getElementById("product-desc"),
   tryonClothing: document.getElementById("tryon-clothing"),
+  tryonClothing2: document.getElementById("tryon-clothing2"),
+  tryonExtra: document.getElementById("tryon-extra"),
   personPreview: document.getElementById("person-preview"),
   personInput: document.getElementById("person-input"),
   btnStartFit: document.getElementById("btn-start-fit"),
@@ -119,6 +173,17 @@ const els = {
   resultBefore: document.getElementById("result-before"),
   resultAfter: document.getElementById("result-after"),
   elapsed: document.getElementById("elapsed"),
+  inputHeight: document.getElementById("input-height"),
+  inputWeight: document.getElementById("input-weight"),
+  inputUsualSize: document.getElementById("input-usual-size"),
+  sizeBox: document.getElementById("size-box"),
+  sizeResult: document.getElementById("size-result"),
+  sizeValue: document.getElementById("size-value"),
+  sizeReason: document.getElementById("size-reason"),
+  sizeMeta: document.getElementById("size-meta"),
+  mixmatch: document.getElementById("mixmatch"),
+  mixmatchList: document.getElementById("mixmatch-list"),
+  btnBeforeToggle: document.getElementById("btn-before-toggle"),
 };
 
 function getProduct() {
@@ -162,12 +227,30 @@ function renderProduct() {
   els.productDesc.textContent = product.desc;
 }
 
+function getPartner() {
+  return state.partnerId ? PRODUCTS.find((p) => p.id === state.partnerId) : null;
+}
+
 function renderTryOn() {
   const product = getProduct();
   els.tryonClothing.src = product.image;
   els.tryonClothing.alt = product.title;
   els.apiEndpoint.textContent = TRY_ON_API;
   els.btnStartFit.disabled = !state.personFile;
+
+  const partner = getPartner();
+  els.tryonExtra.classList.toggle("hidden", !partner);
+  if (partner) {
+    els.tryonClothing2.src = partner.image;
+    els.tryonClothing2.alt = partner.title;
+  }
+
+  const saved = loadBodySize();
+  if (saved) {
+    els.inputHeight.value = saved.heightCm;
+    els.inputWeight.value = saved.weightKg;
+    els.inputUsualSize.value = saved.usualSize;
+  }
 }
 
 function setPersonFromFile(file, previewUrl) {
@@ -241,15 +324,36 @@ async function startFitting() {
   }, 100);
 
   try {
-    const clothingFile = await urlToFile(product.image, `${product.id}.jpg`);
+    const partner = getPartner();
     const formData = new FormData();
     formData.append("person", state.personFile, state.personFile.name || "person.jpg");
+
+    const clothingFile = await urlToFile(product.image, `${product.id}.jpg`);
     formData.append("clothing", clothingFile, clothingFile.name);
-    formData.append("clothing_count", "1");
+    if (partner) {
+      const partnerFile = await urlToFile(partner.image, `${partner.id}.jpg`);
+      formData.append("clothing", partnerFile, partnerFile.name);
+    }
+    formData.append("clothing_count", partner ? "2" : "1");
+
     formData.append("mallId", MALL_ID);
+    formData.append("mallName", MALL_NAME); // 결과 이미지에 브랜드 워터마크를 굽는다
     formData.append("productId", product.id);
     formData.append("sessionId", SESSION_ID);
-    sendEvent("fitting_start", { productId: product.id });
+
+    // MY 사이즈를 입력했으면 핏 표현에 반영시킨다
+    const body = readBodySizeInput() || loadBodySize();
+    if (body) {
+      saveBodySize(body);
+      formData.append("heightCm", String(body.heightCm));
+      formData.append("weightKg", String(body.weightKg));
+      formData.append("usualSize", body.usualSize);
+    }
+
+    sendEvent("fitting_start", {
+      productId: product.id,
+      partnerProductId: partner ? partner.id : null,
+    });
 
     const response = await fetch(TRY_ON_API, {
       method: "POST",
@@ -267,6 +371,14 @@ async function startFitting() {
     state.fittingEventId = data.fittingEventId || null;
     els.resultBefore.src = state.personPreviewUrl;
     els.resultAfter.src = data.imageUrl;
+
+    // 결과는 After 만 크게 보여준다 (Before 는 토글)
+    state.showBefore = false;
+    applyBeforeToggle();
+
+    renderSizeRecommendation(product);
+    renderMixMatch(product);
+
     els.loadingPanel.classList.add("hidden");
     els.resultPanel.classList.remove("hidden");
     history.replaceState(null, "", `#result/${product.id}`);
@@ -282,6 +394,119 @@ async function startFitting() {
     els.errorMessage.textContent =
       error?.message ||
       "네트워크 또는 서버 오류입니다. Render 백엔드가 깨어 있는지 확인해 주세요.";
+  }
+}
+
+// ── 결과 화면 구성 ───────────────────────────────────────────
+
+function applyBeforeToggle() {
+  els.resultBefore.classList.toggle("hidden", !state.showBefore);
+  els.resultAfter.classList.toggle("hidden", state.showBefore);
+  els.btnBeforeToggle.textContent = state.showBefore ? "피팅 결과 보기" : "원본 보기";
+}
+
+/** 사이즈 추천 — 입력이 없으면 안내 문구로 입력을 유도한다. */
+function renderSizeRecommendation(product) {
+  const body = readBodySizeInput() || loadBodySize();
+  if (!body) {
+    els.sizeResult.classList.add("hidden");
+    return;
+  }
+
+  const result = window.CodiPopSize.recommendClothingSize({
+    heightCm: body.heightCm,
+    weightKg: body.weightKg,
+    usualSize: body.usualSize,
+    category: product.category,
+    productSize: product.productSize,
+  });
+
+  els.sizeValue.textContent = result.recommendedSize;
+  els.sizeReason.textContent = window.CodiPopSize.formatSizeReason(result);
+  els.sizeMeta.textContent =
+    `${body.heightCm}cm · ${body.weightKg}kg · BMI ${result.bmi}` +
+    (product.productSize ? ` · 상품 표기 ${product.productSize}` : "");
+  els.sizeResult.classList.remove("hidden");
+}
+
+/** 믹스매치 업셀링 — 어울리는 상품을 제안하고 '함께 피팅'으로 연결한다. */
+function renderMixMatch(product) {
+  const matches = getMixMatches(product);
+  if (!matches.length) {
+    els.mixmatch.classList.add("hidden");
+    return;
+  }
+  els.mixmatchList.innerHTML = matches
+    .map(
+      (p) => `
+    <div class="mix-card">
+      <img src="${p.image}" alt="${p.title}" />
+      <p class="mix-title">${p.title}</p>
+      <p class="mix-price">${p.priceLabel}</p>
+      <button type="button" class="btn-secondary mix-btn" data-mix-id="${p.id}">
+        함께 피팅
+      </button>
+    </div>`,
+    )
+    .join("");
+  els.mixmatch.classList.remove("hidden");
+}
+
+/** 어울리는 상품과 함께 다시 피팅 — 백엔드가 옷 2벌 동시 착장을 지원한다. */
+function startCoFitting(partnerId) {
+  state.partnerId = partnerId;
+  sendEvent("mixmatch_click", {
+    productId: state.productId,
+    partnerProductId: partnerId,
+  });
+  openTryOn();
+}
+
+async function saveResultImage() {
+  if (!state.resultUrl) return;
+  sendEvent("save_image", {
+    productId: state.productId,
+    fittingEventId: state.fittingEventId,
+  });
+  try {
+    // 워터마크는 서버에서 이미지에 구워져 있으므로 그대로 내려받으면 된다
+    const res = await fetch(state.resultUrl);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `codipop-${state.productId}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (_) {
+    // CORS 등으로 blob 다운로드가 막히면 새 탭으로 열어 저장하게 한다
+    window.open(state.resultUrl, "_blank", "noopener");
+  }
+}
+
+async function shareResult() {
+  if (!state.resultUrl) return;
+  const product = getProduct();
+  sendEvent("share", {
+    productId: product.id,
+    fittingEventId: state.fittingEventId,
+  });
+  const shareData = {
+    title: `${MALL_NAME} · ${product.title}`,
+    text: `${product.title} 입어봤어요. 나한테 어울릴까?`,
+    url: state.resultUrl,
+  };
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData);
+      return;
+    }
+    await navigator.clipboard.writeText(state.resultUrl);
+    alert("결과 이미지 주소를 복사했습니다. 카카오톡·인스타그램에 붙여넣어 보세요.");
+  } catch (_) {
+    /* 사용자가 공유를 취소한 경우 — 아무것도 하지 않는다 */
   }
 }
 
@@ -314,8 +539,28 @@ function bindEvents() {
   document.getElementById("btn-buy-result").addEventListener("click", goBuy);
   document.getElementById("btn-retry").addEventListener("click", () => {
     sendEvent("retry", { productId: state.productId });
+    state.partnerId = null; // 단품 피팅으로 되돌린다
     openTryOn();
   });
+
+  els.btnBeforeToggle.addEventListener("click", () => {
+    state.showBefore = !state.showBefore;
+    applyBeforeToggle();
+  });
+
+  els.mixmatchList.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-mix-id]");
+    if (!btn) return;
+    startCoFitting(btn.dataset.mixId);
+  });
+
+  document.getElementById("btn-save").addEventListener("click", saveResultImage);
+  document.getElementById("btn-share").addEventListener("click", shareResult);
+
+  // 사이즈 입력이 있으면 패널을 펼친 채로 시작한다
+  if (loadBodySize()) {
+    els.sizeBox.open = false;
+  }
   document.getElementById("btn-start-fit").addEventListener("click", startFitting);
 
   els.personInput.addEventListener("change", () => {
