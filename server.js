@@ -169,7 +169,10 @@ app.post('/try-on', upload.any(), async (req, res) => {
     const clothingFiles = req.files.filter(file => file.fieldname.startsWith('clothing'));
 
     // 만약 clothing으로 시작하는 파일이 없다면, person이 아닌 모든 파일을 옷으로 간주
-    const allClothingFiles = clothingFiles.length > 0 ? clothingFiles : req.files.filter(file => file.fieldname !== 'person');
+    // (워터마크용 로고는 옷이 아니므로 제외한다)
+    const allClothingFiles = clothingFiles.length > 0
+      ? clothingFiles
+      : req.files.filter(file => file.fieldname !== 'person' && file.fieldname !== 'mallLogo');
 
     if (!personFile || allClothingFiles.length === 0) {
       return res.status(400).json({ success: false, message: '사람과 옷 이미지가 모두 필요합니다.' });
@@ -327,11 +330,20 @@ app.post('/try-on', upload.any(), async (req, res) => {
     // 쇼핑몰 브랜드 워터마크 (mallName 을 보낸 요청에만 적용).
     // 저장·공유된 이미지에 남아야 의미가 있으므로 업로드 전에 굽는다.
     // B2C 앱은 자체 워터마크 컴포넌트를 쓰므로 mallName 을 보내지 않는다.
+    // 로고 파일(mallLogo)을 함께 보내면 폰트와 무관하게 합성된다. 한글 몰명은 이 경로를 써야 한다.
     const mallName = typeof req.body?.mallName === 'string' ? req.body.mallName.trim().slice(0, 40) : '';
-    if (mallName) {
+    const logoFile = (req.files || []).find(file => file.fieldname === 'mallLogo');
+    if (mallName || logoFile) {
       const wmStart = Date.now();
-      generatedImageBuffer = await applyBrandWatermark(generatedImageBuffer, mallName);
-      console.log(`[${requestId}] 워터마크 합성 완료: "${mallName}" (${Date.now() - wmStart}ms)`);
+      const before = generatedImageBuffer;
+      generatedImageBuffer = await applyBrandWatermark(generatedImageBuffer, mallName, {
+        logoBuffer: logoFile ? logoFile.buffer : null,
+      });
+      const applied = generatedImageBuffer !== before;
+      console.log(
+        `[${requestId}] 워터마크 ${applied ? '합성 완료' : '생략'}: ` +
+          `"${mallName}"${logoFile ? ' + 로고' : ''} (${Date.now() - wmStart}ms)`,
+      );
     }
 
     const fileName = `results/${Date.now()}_result.jpeg`;

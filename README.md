@@ -37,7 +37,7 @@ node server.js        # 기본 포트 3000
 ### POST /try-on
 
 **필수:** `person` (이미지 1장), `clothing` (이미지 1~2장)
-**선택:** `clothing_count`, `heightCm`, `weightKg`, `usualSize`, `mallId`, `productId`, `sessionId`, `userId`
+**선택:** `clothing_count`, `heightCm`, `weightKg`, `usualSize`, `mallId`, `productId`, `sessionId`, `userId`, `mallName`, `mallLogo`(파일)
 
 의류가 3장 이상이면 앞의 2장만 처리하고 `warning`을 함께 반환합니다.
 
@@ -130,6 +130,27 @@ TENANT_TIERS={"lirin":"premium","justone":"standard"}
 `aspectRatio`는 지정하지 않습니다 — 프롬프트가 원본 비율 유지를 지시하므로 값을 강제하면 충돌합니다.
 
 ---
+
+## 브랜드 워터마크 (watermark.js)
+
+`mallName` 또는 `mallLogo` 를 함께 보내면 결과 이미지 우하단에 브랜드를 **굽습니다**.
+CSS 오버레이는 다운로드하면 사라지므로, 저장·공유 이미지에 남기려면 서버 합성이어야 합니다.
+
+| 입력 | 동작 |
+|---|---|
+| `mallLogo` (이미지 파일) | **로고 합성 — 폰트와 무관하므로 항상 안전** |
+| `mallName` (라틴 문자) | 텍스트 배지 합성 |
+| `mallName` (한글 등) | **워터마크 생략** + 경고 로그 |
+
+> ⚠️ **운영 서버에 한글 폰트가 없습니다.**
+> SVG 텍스트로 한글을 렌더링하면 예외 없이 두부(tofu) 박스가 찍힙니다.
+> 렌더러 입장에서는 "성공"이라 try/catch 로 잡히지 않아, 실제로 "리린"이
+> 네모로 출력되는 것을 확인했습니다. 그래서 라틴 문자가 아니면 아예 생략합니다.
+>
+> **한글 몰명은 `mallLogo` 로 로고 이미지를 보내세요.** 실제 제휴 시에도 이 경로가 맞습니다.
+> 굳이 한글 텍스트를 쓰려면 배포에 폰트 파일을 포함하고 `WATERMARK_FONT_FAMILY` 를 지정해야 합니다.
+
+워터마크는 합성 결과에 얹는 후처리라 **상품 수와 무관하며 AI 비용이 0원**입니다.
 
 ## Firestore
 
