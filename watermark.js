@@ -49,24 +49,43 @@ function layout(width, height) {
   };
 }
 
-/** 로고 이미지를 우하단에 합성한다. 폰트와 무관하므로 항상 안전하다. */
+/**
+ * 로고 이미지를 우하단에 합성한다. 폰트와 무관하므로 항상 안전하다.
+ *
+ * 로고 뒤에 반투명 플레이트를 깐다. 흰 로고는 밝은 배경(흰 티셔츠·하늘)에서,
+ * 검은 로고는 어두운 배경에서 사라지기 때문에, 어떤 사진·어떤 로고에서도
+ * 읽히게 하려면 배경이 필요하다. 플레이트는 도형만 있어 폰트를 타지 않는다.
+ */
 async function compositeLogo(imageBuffer, logoBuffer, width, height) {
   const { base, margin } = layout(width, height);
-  const logoW = Math.round(base * 0.22);
+  const logoW = Math.round(base * 0.2);
 
   const logo = await sharp(logoBuffer)
-    .resize(logoW, null, { fit: 'inside', withoutEnlargement: true })
+    .resize(logoW, Math.round(logoW * 0.6), { fit: 'inside', withoutEnlargement: true })
     .png()
     .toBuffer();
   const logoMeta = await sharp(logo).metadata();
+  const lw = logoMeta.width || logoW;
+  const lh = logoMeta.height || Math.round(logoW * 0.4);
+
+  const pad = Math.round(base * 0.018);
+  const plateW = lw + pad * 2;
+  const plateH = lh + pad * 2;
+  const radius = Math.round(pad * 1.2);
+
+  const plate = Buffer.from(
+    `<svg width="${plateW}" height="${plateH}" xmlns="http://www.w3.org/2000/svg">` +
+      `<rect x="0" y="0" width="${plateW}" height="${plateH}" rx="${radius}" ry="${radius}" ` +
+      `fill="rgba(0,0,0,0.42)"/></svg>`,
+  );
+
+  const plateLeft = width - plateW - margin;
+  const plateTop = height - plateH - margin;
 
   return sharp(imageBuffer)
     .composite([
-      {
-        input: logo,
-        top: height - (logoMeta.height || logoW) - margin,
-        left: width - (logoMeta.width || logoW) - margin,
-      },
+      { input: plate, top: plateTop, left: plateLeft },
+      { input: logo, top: plateTop + pad, left: plateLeft + pad },
     ])
     .jpeg({ quality: 92 })
     .toBuffer();

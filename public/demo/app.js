@@ -8,8 +8,11 @@ const TRY_ON_API = `${API_ORIGIN}/try-on`;
 const EVENTS_API = `${API_ORIGIN}/events`;
 
 const MALL_ID = "demo-mall";
-// 결과 이미지에 새길 브랜드명. 제휴 몰에 붙일 때 실제 몰 이름으로 바꾸면 된다.
 const MALL_NAME = "DEMO MALL";
+// 결과 이미지에 새길 로고. 운영 서버에는 한글 폰트가 없어 텍스트 워터마크로는
+// 한글 몰명이 깨지므로, 로고 이미지를 보내는 것이 정식 경로다.
+// 로고는 제작 시점에 글자가 이미지로 고정되어 서버 폰트와 무관하다.
+const MALL_LOGO = "./assets/mall-logo.png";
 
 // 방문자 1명을 식별하는 값. 피팅 → 구매 클릭을 이어 붙여 전환율을 계산한다.
 function getSessionId() {
@@ -337,8 +340,17 @@ async function startFitting() {
     formData.append("clothing_count", partner ? "2" : "1");
 
     formData.append("mallId", MALL_ID);
-    formData.append("mallName", MALL_NAME); // 결과 이미지에 브랜드 워터마크를 굽는다
+    formData.append("mallName", MALL_NAME);
     formData.append("productId", product.id);
+
+    // 브랜드 로고를 함께 보내면 서버가 결과 이미지에 구워 준다.
+    // 로고를 불러오지 못해도 피팅은 그대로 진행한다.
+    try {
+      const logoFile = await urlToFile(MALL_LOGO, "mall-logo.png");
+      formData.append("mallLogo", logoFile, logoFile.name);
+    } catch (_) {
+      /* 로고 없이 진행 — mallName 이 라틴 문자면 텍스트 배지로 대체된다 */
+    }
     formData.append("sessionId", SESSION_ID);
 
     // MY 사이즈를 입력했으면 핏 표현에 반영시킨다
