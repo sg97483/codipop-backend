@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>연동 예시 — 쇼핑몰 상품 상세에 붙이는 한 줄</title>
+    <meta property="og:title" content="오버핏 코튼 셔츠" />
+    <meta
+      property="og:image"
+      content="https://codipop-backend.onrender.com/demo/assets/top.jpg"
+    />
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+          "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+        color: #14161a;
+        background: #fff;
+      }
+      .page { max-width: 900px; margin: 0 auto; padding: 28px 20px 60px; }
+      .banner {
+        background: #111318; color: #fff;
+        padding: 14px 20px; border-radius: 12px; margin-bottom: 26px;
+      }
+      .banner h1 { margin: 0 0 4px; font-size: 16px; }
+      .banner p { margin: 0; font-size: 13px; color: #b9bfc9; }
+
+      .detail { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+      @media (max-width: 720px) { .detail { grid-template-columns: 1fr; } }
+      .detail img { width: 100%; border-radius: 12px; display: block; }
+      .name { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
+      .price { font-size: 18px; margin: 0 0 18px; }
+      .buy {
+        width: 100%; padding: 14px; border: 1px solid #d9dde3;
+        background: #fff; border-radius: 10px; font: inherit; font-weight: 600;
+        cursor: pointer;
+      }
+
+      .howto { margin-top: 44px; border-top: 1px solid #e6e9ee; padding-top: 26px; }
+      .howto h2 { font-size: 16px; margin: 0 0 10px; }
+      pre {
+        background: #f5f6f8; border: 1px solid #e6e9ee; border-radius: 10px;
+        padding: 14px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+      }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+      th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eceff3; vertical-align: top; }
+      th { color: #6b7280; font-weight: 600; white-space: nowrap; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="banner">
+        <h1>이 페이지는 쇼핑몰 상품 상세를 흉내 낸 예시입니다</h1>
+        <p>아래 '착용해 보기' 버튼은 코디팝이 넣은 것이 아니라, 스크립트 한 줄이 스스로 만든 것입니다.</p>
+      </div>
+
+      <!-- ↓↓↓ 여기부터는 몰이 원래 갖고 있던 상품 상세 마크업입니다 ↓↓↓ -->
+      <div class="detail">
+        <div>
+          <img src="/demo/assets/top.jpg" alt="오버핏 코튼 셔츠" />
+        </div>
+        <div>
+          <p class="name">오버핏 코튼 셔츠</p>
+          <p class="price">39,000원</p>
+          <p>어깨선을 내린 오버핏 실루엣. 사계절 입기 좋은 두께감입니다.</p>
+
+          <button type="button" class="buy">바로 구매</button>
+
+          <!-- 코디팝 버튼이 들어갈 자리. 상품 정보를 여기에 적어 둡니다. -->
+          <div
+            data-codipop-button
+            data-codipop-product="top-01"
+            data-codipop-name="오버핏 코튼 셔츠"
+            data-codipop-price="39000"
+            data-codipop-image="/demo/assets/top.jpg"
+            data-codipop-category="TOP"
+            data-codipop-sizes="M"
+            data-codipop-buy="/widget/example.html?bought=1"
+          ></div>
+        </div>
+      </div>
+      <!-- ↑↑↑ 여기까지 ↑↑↑ -->
+
+      <section class="howto">
+        <h2>몰이 추가하는 코드 — 이게 전부입니다</h2>
+        <pre><code>&lt;!-- ① 페이지 어딘가에 한 번 --&gt;
+&lt;script src="https://codipop-backend.onrender.com/widget.js"
+        data-codipop-key="pk_demo_mall" defer&gt;&lt;/script&gt;
+
+&lt;!-- ② 버튼을 넣고 싶은 자리에 --&gt;
+&lt;div data-codipop-button
+     data-codipop-product="상품코드"
+     data-codipop-name="상품명"
+     data-codipop-price="39000"
+     data-codipop-image="상품 이미지 주소"
+     data-codipop-buy="구매/장바구니 주소"&gt;&lt;/div&gt;</code></pre>
+
+        <h2>속성 설명</h2>
+        <table>
+          <tr><th>data-codipop-key</th><td>발급받은 공개 키. 페이지에 노출되어도 되는 값이며, 허용 도메인에서만 동작합니다.</td></tr>
+          <tr><th>data-codipop-product</th><td>상품 코드. 리포트에서 상품을 구분하는 기준이 됩니다.</td></tr>
+          <tr><th>data-codipop-name</th><td>상품명. 넣으면 리포트에 코드 대신 이름으로 표시됩니다.</td></tr>
+          <tr><th>data-codipop-price</th><td>가격(숫자). 피팅 후 구매 클릭의 추정 매출을 계산합니다.</td></tr>
+          <tr><th>data-codipop-image</th><td>상품 이미지 주소. <strong>누끼 이미지를 따로 만들 필요 없이 지금 쓰는 상품 사진 그대로</strong> 넣으면 됩니다.</td></tr>
+          <tr><th>data-codipop-buy</th><td>구매 또는 장바구니 주소. 생략하면 현재 페이지로 돌아옵니다.</td></tr>
+          <tr><th>data-codipop-category</th><td>TOP / BOTTOM / OUTER / DRESS. 사이즈 추천 정확도가 올라갑니다. (선택)</td></tr>
+          <tr><th>data-codipop-sizes</th><td>상품 표기 사이즈(예: M). 넣으면 "이 상품은 한 치수 크게" 같은 안내가 가능합니다. (선택)</td></tr>
+        </table>
+
+        <h2>생략하면 어떻게 되나요</h2>
+        <p>
+          이미지·상품명을 적지 않으면 위젯이 페이지에서 스스로 찾습니다
+          (OG 태그 → 페이지에서 가장 큰 이미지 순). 다만 리포트의 정확도가 떨어지므로
+          <strong>상품 코드와 이름은 넣는 것을 권장</strong>합니다.
+        </p>
+      </section>
+    </div>
+
+    <script src="/widget.js" data-codipop-key="pk_demo_mall" defer></script>
+  </body>
+</html>

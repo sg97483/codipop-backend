@@ -30,14 +30,23 @@ node server.js        # 기본 포트 3000
 | POST | `/analyze-clothing` | 의류 카테고리·상품명 자동 분류 (비전) |
 | POST | `/get-recommendation` | 코디 추천 (※ 프롬프트가 하드코딩되어 사실상 데모 수준) |
 | POST | `/events` | 위젯 상호작용·구매 클릭 수집 |
-| GET | `/stats/:mallId` | 몰별 통계 (대시보드·파일럿 리포트·청구 근거) |
+| GET | `/my/stats` | **내 몰 리포트.** 토큰이 몰을 결정한다 (대시보드가 쓰는 경로) |
+| GET | `/stats/:mallId` | 몰별 통계 (내부용·마스터 토큰) |
+| GET | `/widget.js` | **임베드 위젯 로더.** 고객사가 붙이는 스크립트 한 줄 |
+| GET | `/widget/config` | 위젯 부팅용 공개 정보 (`?key=pk_...`) |
+| GET | `/widget/fitting.html` | 위젯이 띄우는 iframe 피팅 화면 |
+| GET | `/widget/example.html` | **연동 예시 페이지 (고객사 전달용)** |
 | GET | `/demo/` | 파일럿 몰 제휴용 웹 데모 |
 | GET | `/app-ads.txt` | AdMob 퍼블리셔 인증 |
 
 ### POST /try-on
 
-**필수:** `person` (이미지 1장), `clothing` (이미지 1~2장)
-**선택:** `clothing_count`, `heightCm`, `weightKg`, `usualSize`, `mallId`, `productId`, `sessionId`, `userId`, `mallName`, `mallLogo`(파일)
+**필수:** `person` (이미지 1장) + 옷 이미지
+옷은 파일(`clothing`, 1~2장) 또는 **URL**(`clothingUrl`, `clothingUrl2`) 중 하나로 보냅니다.
+**선택:** `apiKey`, `clothing_count`, `heightCm`, `weightKg`, `usualSize`, `mallId`, `productId`, `productName`, `sessionId`, `userId`, `mallName`, `mallLogo`(파일)
+
+> `apiKey`를 보내면 **body 의 `mallId`는 무시되고 키가 가리키는 몰로 기록**됩니다.
+> 키 없이 `mallId`만 보내는 기존 경로(B2C 앱·구 데모)도 그대로 동작합니다.
 
 의류가 3장 이상이면 앞의 2장만 처리하고 `warning`을 함께 반환합니다.
 
@@ -62,17 +71,36 @@ node server.js        # 기본 포트 3000
 허용 타입만 기록됩니다 (그 외 400):
 `widget_open` `fitting_start` `result_view` `buy_click` `retry` `save_image` `share`
 
-### GET /stats/:mallId
+### GET /my/stats
+
+대시보드가 호출하는 경로입니다. **몰 ID 를 파라미터로 받지 않습니다.**
 
 ```
-GET /stats/demo-mall?days=30&minFittings=2&token=<STATS_TOKEN>
+GET /my/stats?token=<몰의 dashboardToken>&days=30&minFittings=2
+```
+
+| 토큰 종류 | 볼 수 있는 몰 |
+|---|---|
+| 고객사 `dashboardToken` | **그 몰 하나뿐.** `mall` 파라미터를 넣어도 무시된다 |
+| 마스터 `STATS_TOKEN` | `?mall=` 로 지정한 몰 (우리 내부 확인용) |
+| 아무 토큰도 설정 안 됨 | 과도기 — 누구나 조회 가능. **실제 몰 데이터 투입 전 반드시 토큰을 설정할 것** |
+
+화면에 몰 ID 입력칸을 두지 않는 이유가 이것입니다. 입력칸이 있으면 사장님이
+남의 몰 ID 를 넣어볼 수 있고, 그 순간 사고가 됩니다. **볼 수 있는 몰은 토큰이 정합니다.**
+
+### GET /stats/:mallId
+
+내부용입니다. 몰별 `dashboardToken` 또는 마스터 `STATS_TOKEN` 으로 인증합니다.
+
+```
+GET /stats/demo-mall?days=30&minFittings=2&token=<토큰>
 ```
 
 | 파라미터 | 기본 | 설명 |
 |---|---|---|
 | `days` | 30 | 조회 기간 (1~365) |
 | `minFittings` | 2 | "피팅했지만 안 산 상품" 최소 표본. 파일럿 초기엔 1로 낮춰 볼 것 |
-| `token` | — | `STATS_TOKEN` 설정 시 필수 |
+| `token` | — | 해당 몰의 `dashboardToken` 또는 `STATS_TOKEN` |
 
 응답은 사업기획서 슬라이드 21에서 요구된 5개 항목을 담습니다 —
 피팅 횟수(전체/1인당), 피팅 후 구매 전환, 최다 피팅 상품, **피팅했지만 안 산 상품**, 업셀링.
@@ -91,15 +119,106 @@ GET /stats/demo-mall?days=30&minFittings=2&token=<STATS_TOKEN>
 | `GEMINI_API_KEY` | — | **필수.** Gemini API 키 |
 | `GOOGLE_CREDENTIALS` | — | **필수(운영).** 서비스 계정 JSON 문자열. 없으면 로컬 `serviceAccountKey.json` 사용 |
 | `PORT` | 3000 | 서버 포트 |
-| `TENANT_TIERS` | `{}` | **고객사별 엔진 등급 매핑.** 아래 참조 |
+| `TENANTS` | 데모 1곳 | **고객사 레지스트리.** API 키·조회 토큰·등급·허용 도메인. 아래 참조 |
+| `TENANT_TIERS` | `{}` | (구) 고객사별 등급 매핑. `TENANTS` 로 대체됨 — 키 없는 레거시 요청에만 적용 |
 | `DEFAULT_TIER` | `standard` | 매핑에 없는 몰의 기본 등급 |
 | `IMAGE_MODEL` | `gemini-3.1-flash-lite-image` | 스탠다드 등급 모델 |
 | `PREMIUM_IMAGE_MODEL` | `gemini-3.1-flash-image` | 프리미엄 등급 모델 |
 | `TEXT_MODEL` | `gemini-2.5-flash-lite` | 분류·추천용 텍스트 모델 |
-| `STATS_TOKEN` | — | `/stats` 접근 토큰. **미설정 시 무인증 공개** |
+| `STATS_TOKEN` | — | 마스터 조회 토큰. **미설정이고 몰별 토큰도 없으면 무인증 공개** |
 | `USD_TO_KRW` | 1400 | 원가 환산 환율 |
 | `MAX_IMAGE_DIMENSION` | 1536 | Gemini 전송 전 축소 상한(px) |
 | `LOG_WRITE_TIMEOUT_MS` | 3000 | 로깅 쓰기 타임아웃 |
+| `REMOTE_IMAGE_MAX_BYTES` | 12MB | 상품 이미지 URL 수신 크기 상한 |
+| `REMOTE_IMAGE_TIMEOUT_MS` | 8000 | 상품 이미지 수신 타임아웃 |
+| `REMOTE_IMAGE_ALLOW_PRIVATE` | `false` | **로컬 개발 전용.** 켜면 SSRF 방어가 꺼진다. 운영에 절대 설정 금지 |
+
+---
+
+## 임베드 위젯 (widget)
+
+기획서 슬라이드 14의 **"연동이 복잡할 것 같다" 74.5%** 에 대한 답입니다.
+고객사가 상품 상세 템플릿에 추가하는 코드는 이것이 전부입니다.
+
+```html
+<!-- ① 페이지 어딘가에 한 번 -->
+<script src="https://codipop-backend.onrender.com/widget.js"
+        data-codipop-key="pk_..." defer></script>
+
+<!-- ② 버튼을 넣고 싶은 자리에 -->
+<div data-codipop-button
+     data-codipop-product="상품코드"
+     data-codipop-name="상품명"
+     data-codipop-price="39000"
+     data-codipop-image="상품 이미지 주소"
+     data-codipop-buy="구매/장바구니 주소"></div>
+```
+
+**동작하는 예시 페이지: `/widget/example.html`** — 고객사에 이 링크를 보내면 됩니다.
+
+| 파일 | 역할 |
+|---|---|
+| `public/widget/codipop.js` | 로더. 버튼 주입 + iframe 오버레이 + postMessage |
+| `public/widget/fitting.html` `.css` `.js` | iframe 안의 피팅 화면 |
+| `public/widget/example.html` | 연동 예시 + 속성 설명 (고객사 전달용) |
+| `public/widget/size-recommend.js` | 사이즈 추천 (데모와 동일 로직) |
+
+### 설계 결정 세 가지
+
+**1. 피팅 UI 는 iframe 안에 있다.**
+임대몰(카페24·고도몰) 스킨이 어떤 CSS 를 쓰는지 우리가 알 수 없습니다. 몰 페이지에
+직접 DOM 을 그리면 스킨마다 깨지고, 그 대응 비용이 곧 "연동이 복잡하다"는 인식이 됩니다.
+iframe 은 CSS 가 양방향으로 격리되므로 **어느 몰에 붙여도 같은 화면**이 나옵니다.
+
+**2. 상품 이미지는 URL 로 받아 서버가 내려받는다** (`remote-image.js`).
+위젯은 몰 페이지의 이미지 *주소*만 알고 파일은 갖고 있지 않습니다. 브라우저에서 그
+이미지를 읽으면 몰 CDN 의 CORS 에 막힙니다. 서버에는 CORS 가 없으므로 여기서 받습니다.
+부수 효과로 **슬라이드 14의 82.1% "누끼·재촬영 부담"이 같이 풀립니다** — 몰이 이미지를
+따로 준비할 필요 없이 이미 올려둔 상품 사진 주소만 있으면 됩니다.
+
+> ⚠️ 주소를 받아 서버가 요청을 보내는 기능이므로 **SSRF 방어가 들어 있습니다.**
+> 사설 대역(10.x, 192.168.x, 127.x, 169.254.169.254 메타데이터 등)과 리다이렉트,
+> 이미지가 아닌 Content-Type 을 모두 차단합니다. `remote-image.js` 를 수정할 때
+> 이 방어를 무력화하지 마세요 — 뚫리면 클라우드 자격증명이 노출됩니다.
+
+**3. 구매 이동은 부모 창이 한다.**
+iframe 안에서 `location` 을 바꾸면 몰 페이지는 그대로인 채 프레임만 이동해 장바구니
+흐름이 깨집니다. iframe → 부모로 `postMessage({type:'buy', url})` 를 보내고,
+부모가 `location.href` 를 바꿉니다. 부모는 메시지의 `origin` 을 검사합니다.
+
+---
+
+## 고객사 등록 (tenants.js)
+
+키는 두 종류이며 성격이 정반대입니다. **절대 섞어 쓰지 마세요.**
+
+| 키 | 어디에 두는가 | 비밀인가 | 할 수 있는 일 |
+|---|---|---|---|
+| `apiKey` (`pk_...`) | 몰 페이지 `<script>` 태그 | **아니오 — 누구나 본다** | 피팅 요청만 |
+| `dashboardToken` (`sk_...`) | 사장님에게만 전달 | **예** | 그 몰의 리포트 조회 |
+
+```bash
+TENANTS={"lirin":{"name":"리린","tier":"standard","apiKey":"pk_live_a1b2","dashboardToken":"sk_live_x9y8","origins":["https://lirin.co.kr","https://*.cafe24.com"],"logo":"lirin.png"}}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `name` | 몰 이름. 위젯 상단과 리포트 제목에 표시된다 |
+| `tier` | `standard` / `premium` / `premium2k`. 생략 시 `standard` |
+| `apiKey` | 공개 키. **없으면 위젯을 붙일 수 없다** |
+| `dashboardToken` | 리포트 조회 토큰. 없으면 마스터 토큰으로만 조회 가능 |
+| `origins` | 허용 도메인. `https://*.cafe24.com` 처럼 선두 와일드카드 지원 |
+| `logo` | `public/tenant-logos/` 안의 파일명. 워터마크에 쓰인다 |
+
+**`apiKey` 는 페이지 소스에 노출되므로 보호 수단은 `origins` 뿐입니다.** 정식 계약 몰은
+반드시 채우세요. 비워 두면 통과시키는데, 파일럿 중 몰이 도메인을 바꿨다는 이유로
+위젯이 통째로 죽는 것이 더 큰 사고이기 때문입니다.
+
+JSON 이 깨지거나 등급명이 오타여도 서버는 뜹니다 — 데모 테넌트만 남고 경고를 찍습니다.
+부팅 로그의 `고객사(테넌트) 설정:` 줄에서 등록 결과를 확인하세요.
+
+> `TENANTS` 를 설정하지 않으면 데모 테넌트(`demo-mall` / `pk_demo_mall`) 하나만 활성화됩니다.
+> 공개 데모가 계속 동작해야 하므로 코드에 두었으며, 스탠다드 등급이고 데모 몰 통계에만 영향을 줍니다.
 
 ---
 
@@ -146,7 +265,11 @@ CSS 오버레이는 다운로드하면 사라지므로, 저장·공유 이미지
 
 1. 몰에서 로고 이미지를 받는다 (PNG 권장, 배경 투명, 가로 500~1000px)
 2. 흰색 계열 로고를 권장한다 — 합성 시 반투명 검정 플레이트 위에 얹힌다
-3. `/try-on` 요청에 `mallLogo` 필드로 첨부한다
+3. `public/tenant-logos/<파일명>.png` 로 저장하고 `TENANTS` 의 `logo` 필드에 파일명을 적는다
+
+**임베드 위젯은 몰 페이지에 스크립트만 붙이므로 로고를 업로드할 경로가 없습니다.**
+그래서 서버가 등록된 파일을 직접 읽어 씁니다. 요청에 `mallLogo` 가 함께 오면 그쪽이 우선입니다
+(구 데모가 이 경로를 씁니다).
 
 **한글 상호는 로고에 이미 글자가 이미지로 고정되어 있으므로 서버 폰트가 필요 없습니다.**
 로고 뒤에는 반투명 플레이트가 깔려, 흰 티셔츠·밝은 배경 사진에서도 로고가 묻히지 않습니다.
@@ -209,11 +332,16 @@ firebase deploy --only firestore:indexes --project codipop-63c0d
 
 우선순위 순입니다.
 
-1. **`/try-on`이 무인증 공개** — URL만 알면 누구나 무제한 호출 가능. 건당 56원이므로 1만 회면 56만 원. 고객사별 API 키와 서버측 쿼터 필요
-2. **`STATS_TOKEN` 미설정** — `/stats`가 무인증 공개 상태. 파일럿 몰 투입 전 설정할 것
+1. **서버측 쿼터 없음** — 고객사 API 키는 생겼지만 **호출 횟수 제한이 아직 없습니다.**
+   키 없이 `mallId`만 보내는 레거시 경로도 열려 있어, 여전히 무제한 호출이 가능합니다.
+   건당 56원이므로 1만 회면 56만 원. 몰별 월 한도와 레거시 경로 차단이 다음 순번입니다
+2. **토큰 미설정** — `STATS_TOKEN` 도 몰별 `dashboardToken` 도 없으면 리포트가 무인증 공개입니다.
+   **실제 몰 데이터가 들어가기 전에 반드시 설정하세요**
 3. **결과 이미지 보관 정책 없음** — Storage에 `public: true` + 무기한 보관. 고객 얼굴이 포함된 이미지가 URL만 알면 접근 가능하며, B2B 계약 실사에서 지적될 항목. 90일 자동 삭제 + 서명 URL 전환 필요
 4. **CORS 전체 허용** — `Access-Control-Allow-Origin: *`
 5. **`/get-recommendation` 프롬프트 하드코딩** — 옷장 아이템과 날씨가 프롬프트에 박혀 있어 실제 사용자 데이터를 반영하지 않음
 6. **`node_modules`가 git에 추적됨** — `.gitignore`에 있지만 이전에 커밋되어 5,695개 파일이 추적 중. 정리하려면 `git rm -r --cached node_modules` 필요
 7. **`demo-mall` 수동 복사** — `CodiPop/demo-mall/` → `public/demo/`가 수동 동기화. 배포 스크립트화 또는 별도 정적 호스팅으로 분리 권장
-8. **Render 콜드 스타트** — 무료 플랜이면 첫 요청이 수십 초. 영업 미팅 전 반드시 워밍업하거나 Starter 플랜($7/월)으로 전환할 것
+   - `size-recommend.js` 는 이제 **사본이 3개**입니다 (앱 `src/services/sizeRecommendService.ts`, `public/demo/`, `public/widget/`). 앱과 웹이 다른 사이즈를 추천하면 안 되므로 한쪽만 고치지 마세요
+8. **`TENANTS` 가 환경변수** — 고객사가 늘어나면 JSON 한 줄이 감당하지 못합니다. Firestore 컬렉션 + 관리 화면으로 옮길 것. 키 회전(rotate) 수단도 아직 없습니다
+9. **Render 콜드 스타트** — 무료 플랜이면 첫 요청이 수십 초. 영업 미팅 전 반드시 워밍업하거나 Starter 플랜($7/월)으로 전환할 것

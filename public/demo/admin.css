@@ -144,8 +144,57 @@ html, body {
   min-width: 140px;
 }
 
-.token-field { flex: 1 1 180px; }
-.token-field input { width: 100%; }
+/* ── 조회 토큰 입력 (쇼핑몰 ID 입력칸을 대체) ──────── */
+.signin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  margin-bottom: 14px;
+}
+
+.signin label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 240px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.signin input {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.signin-note {
+  flex: 1 1 100%;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.btn-ghost {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
 
 .btn-primary {
   padding: 10px 20px;

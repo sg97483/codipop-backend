@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>CodiPOP 가상 피팅</title>
+    <link rel="stylesheet" href="./fitting.css" />
+  </head>
+  <body>
+    <!--
+      몰 페이지 안의 iframe 으로 뜬다.
+      여기 있는 CSS 는 몰 페이지에 영향을 주지 않고, 몰 CSS 도 여기에 들어오지 않는다.
+      임대몰 스킨이 어떤 스타일을 쓰는지 알 수 없으므로 이 격리가 위젯의 핵심 전제다.
+    -->
+    <header class="bar">
+      <span class="bar-mall" id="bar-mall">CodiPOP</span>
+      <button type="button" class="bar-close" id="btn-close" aria-label="닫기">✕</button>
+    </header>
+
+    <main class="wrap">
+      <!-- 1단계: 사진 선택 -->
+      <section id="step-input" class="step">
+        <div class="product">
+          <img id="product-image" class="product-thumb" alt="" />
+          <div class="product-meta">
+            <p class="product-name" id="product-name"></p>
+            <p class="product-price" id="product-price"></p>
+          </div>
+        </div>
+
+        <div class="person">
+          <div id="person-preview" class="person-preview empty">
+            <span>내 전신 사진을 올려 주세요</span>
+          </div>
+          <div class="person-actions">
+            <label class="btn btn-secondary file-btn">
+              사진 선택
+              <input type="file" id="person-input" accept="image/*" hidden />
+            </label>
+            <button type="button" class="btn btn-ghost" id="btn-sample">체험용 사진</button>
+          </div>
+        </div>
+
+        <details class="size-box">
+          <summary>
+            <span>📏 내 사이즈 입력</span>
+            <em>선택 · 추천 사이즈를 알려드려요</em>
+          </summary>
+          <div class="size-fields">
+            <label>키 (cm)
+              <input type="number" id="input-height" inputmode="numeric" min="120" max="230" placeholder="172" />
+            </label>
+            <label>몸무게 (kg)
+              <input type="number" id="input-weight" inputmode="numeric" min="30" max="200" placeholder="65" />
+            </label>
+            <label>평소 사이즈
+              <select id="input-usual-size">
+                <option value="XS">XS</option>
+                <option value="S">S</option>
+                <option value="M" selected>M</option>
+                <option value="L">L</option>
+                <option value="XL">XL</option>
+                <option value="XXL">XXL</option>
+                <option value="XXL+">XXL 이상</option>
+              </select>
+            </label>
+          </div>
+          <p class="note">최초 1회만 입력하면 됩니다. 핏 표현과 사이즈 추천에만 사용합니다.</p>
+        </details>
+
+        <button type="button" class="btn btn-primary btn-block" id="btn-start" disabled>
+          AI 피팅 시작
+        </button>
+        <p class="note center">사진은 피팅에만 사용하며 몰에 저장되지 않습니다.</p>
+      </section>
+
+      <!-- 2단계: 로딩 -->
+      <section id="step-loading" class="step hidden">
+        <div class="spinner"></div>
+        <h2>AI가 입어보는 중</h2>
+        <p class="note">보통 3~10초 정도 걸려요.</p>
+        <p class="elapsed" id="elapsed">0.0초</p>
+      </section>
+
+      <!-- 3단계: 결과 -->
+      <section id="step-result" class="step hidden">
+        <div class="stage">
+          <img id="result-after" alt="피팅 결과" />
+          <img id="result-before" class="hidden" alt="원본" />
+          <button type="button" class="before-toggle" id="btn-before">원본 보기</button>
+        </div>
+
+        <div id="size-result" class="size-result hidden">
+          <div class="size-badge"><span id="size-value"></span></div>
+          <div class="size-copy">
+            <p id="size-reason"></p>
+            <p class="size-meta" id="size-meta"></p>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary btn-block" id="btn-buy">이 상품 구매하기</button>
+        <div class="result-actions">
+          <button type="button" class="btn btn-secondary" id="btn-save">이미지 저장</button>
+          <button type="button" class="btn btn-secondary" id="btn-share">공유하기</button>
+          <button type="button" class="btn btn-ghost" id="btn-retry">다시 피팅</button>
+        </div>
+        <p class="note center">Powered by <strong>CodiPOP</strong></p>
+      </section>
+
+      <!-- 오류 -->
+      <section id="step-error" class="step hidden">
+        <h2>피팅에 실패했어요</h2>
+        <p class="note" id="error-message"></p>
+        <button type="button" class="btn btn-primary btn-block" id="btn-error-back">다시 시도</button>
+      </section>
+    </main>
+
+    <script src="./size-recommend.js"></script>
+    <script src="./fitting.js"></script>
+  </body>
+</html>

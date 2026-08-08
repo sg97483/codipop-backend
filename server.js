@@ -8,8 +8,19 @@ const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 const { firestore } = require('./firebase-admin.js');
 const { logFittingEvent, logConversionEvent, getMallStats } = require('./analytics.js');
-const { resolveTier, describeTierConfig } = require('./tiers.js');
+const { describeTierConfig } = require('./tiers.js');
+const {
+  resolveRequestTenant,
+  verifyStatsAccess,
+  publicTenantInfo,
+  getTenant,
+  getTenantByApiKey,
+  getTenantByDashboardToken,
+  describeTenantConfig,
+} = require('./tenants.js');
 const { applyBrandWatermark } = require('./watermark.js');
+const { fetchRemoteImage } = require('./remote-image.js');
+const fs = require('fs');
 
 // --- 설정 ---
 const app = express();
@@ -35,6 +46,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 //    프리미엄: gemini-3.1-flash-image 1K (실측 112.4원) — ENTERPRISE 협의 전용
 //    고객사별 매핑은 환경변수 TENANT_TIERS 로 지정한다.
 console.log('합성 엔진 등급 설정:', JSON.stringify(describeTierConfig()));
+console.log('고객사(테넌트) 설정:', JSON.stringify(describeTenantConfig()));
 
 // 2. 텍스트 생성용 모델 (구 gemini-1.5-flash-latest 대체, 더 저렴하고 빠름)
 const TEXT_MODEL = process.env.TEXT_MODEL || 'gemini-2.5-flash-lite';
@@ -92,6 +104,30 @@ async function optimizeImageForGemini(file) {
   }
 }
 
+// 고객사 로고 (워터마크용).
+// 몰이 보내주는 것이 아니라 우리가 등록해 둔 파일을 쓴다 — 임베드 위젯은 몰 페이지에
+// 스크립트 한 줄만 붙이므로 로고 파일을 업로드할 경로가 없다.
+// public/tenant-logos/<파일명> 에 두고 TENANTS 의 logo 필드로 지정한다.
+const TENANT_LOGO_DIR = path.join(__dirname, 'public/tenant-logos');
+const tenantLogoCache = new Map();
+
+function loadTenantLogo(tenant) {
+  if (!tenant || !tenant.logo) return null;
+  if (tenantLogoCache.has(tenant.mallId)) return tenantLogoCache.get(tenant.mallId);
+
+  // 파일명만 허용한다. 경로 조작으로 서버의 다른 파일을 읽히지 않게 한다.
+  const safeName = path.basename(tenant.logo);
+  const fullPath = path.join(TENANT_LOGO_DIR, safeName);
+  let buffer = null;
+  try {
+    buffer = fs.readFileSync(fullPath);
+  } catch (error) {
+    console.warn(`⚠️  ${tenant.mallId} 로고를 읽지 못했습니다 (${safeName}): ${error.code}`);
+  }
+  tenantLogoCache.set(tenant.mallId, buffer);
+  return buffer;
+}
+
 app.use(express.json());
 
 // 기본 라우트 (서버 상태 확인용)
@@ -122,14 +158,56 @@ app.get(['/demo', '/demo/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public/demo/index.html'));
 });
 
+// --- 임베드 위젯 ---
+// 고객사가 상품 상세 템플릿에 붙이는 것은 아래 한 줄이 전부다.
+//   <script src="https://codipop-backend.onrender.com/widget.js" data-codipop-key="pk_..." defer></script>
+// 기획서 슬라이드 14의 74.5% "연동이 복잡할 것 같다" 에 대한 답이 이 한 줄이다.
+app.use(
+  '/widget',
+  express.static(path.join(__dirname, 'public/widget'), { index: false, redirect: false }),
+);
+app.get('/widget.js', (req, res) => {
+  // 몰 페이지가 캐시하되 배포 반영이 하루 이상 늦지 않도록 짧게 잡는다.
+  res.set('Cache-Control', 'public, max-age=600');
+  res.type('application/javascript');
+  res.sendFile(path.join(__dirname, 'public/widget/codipop.js'));
+});
+
+// 위젯 부팅용 공개 설정. dashboardToken 같은 비밀값은 절대 담지 않는다.
+app.get('/widget/config', (req, res) => {
+  const tenant = getTenantByApiKey(req.query.key);
+  if (!tenant) {
+    return res.status(404).json({ success: false, message: '등록되지 않은 API 키입니다.' });
+  }
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json({ success: true, tenant: publicTenantInfo(tenant) });
+});
+
 // --- API 엔드포인트 ---
 app.post('/try-on', upload.any(), async (req, res) => {
   const requestId = Date.now();
   console.log(`[${requestId}] 이미지 처리 요청 받음 (다중 옷 이미지)...`);
   console.log(`[${requestId}] 요청 헤더:`, JSON.stringify(req.headers, null, 2));
 
+  // 고객사 확정. apiKey 가 있으면 그 키가 가리키는 몰을 쓰고 body 의 mallId 는 버린다.
+  // (클라이언트가 보낸 mallId 를 믿으면 아무나 남의 몰 리포트를 오염시킬 수 있다.)
+  const auth = resolveRequestTenant({
+    apiKey: req.body?.apiKey,
+    mallId: req.body?.mallId,
+    origin: req.headers.origin,
+  });
+  if (!auth.ok) {
+    console.warn(`[${requestId}] 인증 거부: ${auth.code}`);
+    return res.status(401).json({ success: false, message: auth.message });
+  }
+  // 이후 모든 로깅·워터마크가 신뢰된 값을 쓰도록 body 를 덮어쓴다.
+  if (auth.trusted) {
+    req.body.mallId = auth.mallId;
+    if (auth.mallName) req.body.mallName = auth.mallName;
+  }
+
   // 요금제 등급 결정. 미등록 몰은 항상 스탠다드로 떨어진다.
-  const tier = resolveTier(req.body?.mallId);
+  const tier = auth.tier;
 
   // 로깅용 컨텍스트 (실패 경로에서도 남겨야 하므로 try 밖에서 선언)
   let geminiMs = null;
@@ -154,25 +232,50 @@ app.post('/try-on', upload.any(), async (req, res) => {
     });
 
   try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ success: false, message: '이미지 파일이 필요합니다.' });
-    }
+    const uploaded = req.files || [];
 
     // 디버깅: 받은 모든 파일 정보 출력
     console.log(`[${requestId}] 받은 모든 파일들:`);
-    req.files.forEach((file, index) => {
+    uploaded.forEach((file, index) => {
       console.log(`[${requestId}]   ${index + 1}. fieldname: "${file.fieldname}", originalname: "${file.originalname}", size: ${file.size} bytes`);
     });
 
     // 전송된 파일들 중에서 'person'과 'clothing'들을 구분합니다.
-    const personFile = req.files.find(file => file.fieldname === 'person');
-    const clothingFiles = req.files.filter(file => file.fieldname.startsWith('clothing'));
+    const personFile = uploaded.find(file => file.fieldname === 'person');
+    const clothingFiles = uploaded.filter(file => file.fieldname.startsWith('clothing'));
 
     // 만약 clothing으로 시작하는 파일이 없다면, person이 아닌 모든 파일을 옷으로 간주
     // (워터마크용 로고는 옷이 아니므로 제외한다)
-    const allClothingFiles = clothingFiles.length > 0
+    let allClothingFiles = clothingFiles.length > 0
       ? clothingFiles
-      : req.files.filter(file => file.fieldname !== 'person' && file.fieldname !== 'mallLogo');
+      : uploaded.filter(file => file.fieldname !== 'person' && file.fieldname !== 'mallLogo');
+
+    // 옷 파일이 없으면 상품 이미지 URL 로 받아온다.
+    // 임베드 위젯은 몰 페이지의 이미지 '주소'만 알고 파일은 갖고 있지 않으며,
+    // 브라우저에서 그 이미지를 직접 읽으면 몰 CDN 의 CORS 에 막힌다. (remote-image.js 주석 참조)
+    if (allClothingFiles.length === 0) {
+      const urls = [req.body?.clothingUrl, req.body?.clothingUrl2]
+        .filter((u) => typeof u === 'string' && u.trim())
+        .slice(0, 2);
+      if (urls.length) {
+        const fetchStart = Date.now();
+        try {
+          allClothingFiles = await Promise.all(
+            urls.map((url) => fetchRemoteImage(url, 'clothing')),
+          );
+          console.log(
+            `[${requestId}] 상품 이미지 ${allClothingFiles.length}건 원격 수신 (${Date.now() - fetchStart}ms)`,
+          );
+        } catch (error) {
+          console.warn(`[${requestId}] 상품 이미지 수신 실패: ${error.message}`);
+          logFailure(`REMOTE_IMAGE: ${error.message}`);
+          return res.status(400).json({
+            success: false,
+            message: `상품 이미지를 불러오지 못했습니다. ${error.message}`,
+          });
+        }
+      }
+    }
 
     if (!personFile || allClothingFiles.length === 0) {
       return res.status(400).json({ success: false, message: '사람과 옷 이미지가 모두 필요합니다.' });
@@ -333,16 +436,17 @@ app.post('/try-on', upload.any(), async (req, res) => {
     // 로고 파일(mallLogo)을 함께 보내면 폰트와 무관하게 합성된다. 한글 몰명은 이 경로를 써야 한다.
     const mallName = typeof req.body?.mallName === 'string' ? req.body.mallName.trim().slice(0, 40) : '';
     const logoFile = (req.files || []).find(file => file.fieldname === 'mallLogo');
-    if (mallName || logoFile) {
+    // 업로드된 로고가 없으면 등록해 둔 고객사 로고를 쓴다.
+    // 임베드 위젯은 몰 페이지에 스크립트만 붙이므로 로고를 올릴 방법이 없다.
+    const logoBuffer = logoFile ? logoFile.buffer : loadTenantLogo(auth.tenant);
+    if (mallName || logoBuffer) {
       const wmStart = Date.now();
       const before = generatedImageBuffer;
-      generatedImageBuffer = await applyBrandWatermark(generatedImageBuffer, mallName, {
-        logoBuffer: logoFile ? logoFile.buffer : null,
-      });
+      generatedImageBuffer = await applyBrandWatermark(generatedImageBuffer, mallName, { logoBuffer });
       const applied = generatedImageBuffer !== before;
       console.log(
         `[${requestId}] 워터마크 ${applied ? '합성 완료' : '생략'}: ` +
-          `"${mallName}"${logoFile ? ' + 로고' : ''} (${Date.now() - wmStart}ms)`,
+          `"${mallName}"${logoBuffer ? (logoFile ? ' + 업로드 로고' : ' + 등록 로고') : ''} (${Date.now() - wmStart}ms)`,
       );
     }
 
@@ -522,7 +626,18 @@ app.post('/get-recommendation', async (req, res) => {
 // 위젯 상호작용 / 구매 클릭 수집
 // 피팅 이벤트와 이어 붙여 "피팅 후 구매 전환율"을 계산하는 분자가 된다.
 app.post('/events', async (req, res) => {
-  const result = await logConversionEvent(req.body);
+  const auth = resolveRequestTenant({
+    apiKey: req.body?.apiKey,
+    mallId: req.body?.mallId,
+    origin: req.headers.origin,
+  });
+  if (!auth.ok) {
+    return res.status(401).json({ success: false, message: auth.message });
+  }
+
+  // 피팅 이벤트와 같은 규칙 — 키가 있으면 키가 가리키는 몰로 기록한다.
+  const body = auth.trusted ? { ...req.body, mallId: auth.mallId } : req.body;
+  const result = await logConversionEvent(body);
   if (!result.ok && result.reason === 'INVALID_TYPE') {
     return res.status(400).json({ success: false, message: '허용되지 않은 이벤트 타입입니다.' });
   }
@@ -530,16 +645,67 @@ app.post('/events', async (req, res) => {
   res.json({ success: result.ok });
 });
 
-// 몰별 통계 (MD 대시보드 / 파일럿 리포트 데이터 소스)
+/**
+ * 내 몰 리포트.
+ *
+ * 화면에서 몰 ID 를 **입력받지 않기 위해** 존재하는 엔드포인트다.
+ * 조회 토큰이 곧 신원이므로, 사장님이 남의 몰 ID 를 넣어보는 경로 자체가 없다.
+ *
+ * 마스터 토큰(STATS_TOKEN)으로 들어온 경우에만 mall 파라미터로 몰을 지정할 수 있다 (우리 내부 확인용).
+ */
+app.get('/my/stats', async (req, res) => {
+  const token = String(req.query.token || '').slice(0, 80);
+  const master = String(process.env.STATS_TOKEN || '').slice(0, 80);
+  const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+  const minFittings = Math.min(Math.max(parseInt(req.query.minFittings, 10) || 2, 1), 100);
+  const requested = String(req.query.mall || '').slice(0, 60);
+
+  const tenant = getTenantByDashboardToken(token);
+  let mallId;
+  let role;
+
+  if (tenant) {
+    // 고객사 토큰 — 자기 몰만. mall 파라미터는 무시한다.
+    mallId = tenant.mallId;
+    role = 'tenant';
+  } else if (master && token === master) {
+    mallId = requested || 'demo-mall';
+    role = 'master';
+  } else if (!master && token === '') {
+    // 아직 아무 토큰도 설정되지 않은 과도기. 현재 배포 동작을 깨지 않기 위해 남겨 둔다.
+    mallId = requested || 'demo-mall';
+    role = 'open';
+    console.warn(`⚠️  /my/stats 가 인증 없이 조회되었습니다 (mall=${mallId}). STATS_TOKEN 을 설정하세요.`);
+  } else {
+    return res.status(401).json({ success: false, message: '조회 토큰이 올바르지 않습니다.' });
+  }
+
+  try {
+    const stats = await getMallStats(mallId, days, minFittings);
+    res.json({
+      success: true,
+      role,
+      mallName: (getTenant(mallId) || {}).name || mallId,
+      stats,
+    });
+  } catch (error) {
+    console.error('통계 조회 실패:', error.message);
+    res.status(500).json({ success: false, message: '통계를 조회하지 못했습니다.' });
+  }
+});
+
+// 몰별 통계 (내부용 / 마스터 토큰). 화면은 /my/stats 를 쓴다.
 app.get('/stats/:mallId', async (req, res) => {
   const mallId = String(req.params.mallId || '').slice(0, 60);
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
   // 표본이 적은 파일럿 초기에는 minFittings=1 로 낮춰서 볼 수 있다.
   const minFittings = Math.min(Math.max(parseInt(req.query.minFittings, 10) || 2, 1), 100);
 
-  // 임시 보호: 정식 대시보드 전까지 토큰을 아는 사람만 조회 가능
-  if (process.env.STATS_TOKEN && req.query.token !== process.env.STATS_TOKEN) {
-    return res.status(401).json({ success: false, message: '인증이 필요합니다.' });
+  // 몰별 dashboardToken → 전체 마스터 STATS_TOKEN 순으로 판정한다.
+  // 몰별 토큰이 있으면 다른 몰 토큰으로는 열리지 않는다 (사장님이 남의 몰을 못 본다).
+  const access = verifyStatsAccess(mallId, req.query.token);
+  if (!access.ok) {
+    return res.status(401).json({ success: false, message: access.message });
   }
 
   try {

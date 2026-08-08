@@ -113,6 +113,9 @@ function logFittingEvent(payload) {
     mallId,
     source,
     productId: safeStr(payload.body?.productId, 120),
+    // 상품명. 리포트에 `top-01` 대신 사람이 읽는 이름이 나오게 하려면 이 값이 필요하다.
+    // 위젯이 몰 페이지에서 직접 읽어 보내주므로 상품 API 연동이 없어도 채워진다.
+    productName: safeStr(payload.body?.productName, 120),
     sessionId: safeStr(payload.body?.sessionId, 80),
     userId: safeStr(payload.body?.userId, 80),
 
@@ -179,6 +182,7 @@ function logConversionEvent(body) {
     mallId,
     source,
     productId: safeStr(body?.productId, 120),
+    productName: safeStr(body?.productName, 120),
     sessionId: safeStr(body?.sessionId, 80),
     fittingEventId: safeStr(body?.fittingEventId, 80),
     // 구매 클릭일 때만 의미가 있는 값 (몰이 알려주면 매출 추정에 사용)
@@ -233,6 +237,14 @@ async function getMallStats(mallId, days = 30, minFittings = 2) {
   const sessions = new Set(success.map((f) => f.sessionId).filter(Boolean));
   const sessionCount = sessions.size;
 
+  // 상품 ID → 이름. 리포트에 `top-01` 이 아니라 실제 상품명이 나오게 한다.
+  // 이름은 나중에 바뀔 수 있으므로 가장 최근에 기록된 값을 쓴다.
+  const nameByProduct = new Map();
+  for (const row of [...fittings, ...conversions]) {
+    if (row.productId && row.productName) nameByProduct.set(row.productId, row.productName);
+  }
+  const labelOf = (productId) => nameByProduct.get(productId) || '';
+
   // 상품별 피팅 횟수
   const fittedByProduct = new Map();
   for (const f of success) {
@@ -265,6 +277,7 @@ async function getMallStats(mallId, days = 30, minFittings = 2) {
       const missed = fitted - bought;
       return {
         productId,
+        productName: labelOf(productId),
         fitted,
         bought,
         missed,
@@ -315,10 +328,12 @@ async function getMallStats(mallId, days = 30, minFittings = 2) {
     // ③ 가장 많이 입어본 옷 / ④ 피팅 후 구매 순위
     topFittedProducts: topN(fittedByProduct).map(([productId, count]) => ({
       productId,
+      productName: labelOf(productId),
       count,
     })),
     topBoughtProducts: topN(boughtByProduct).map(([productId, count]) => ({
       productId,
+      productName: labelOf(productId),
       count,
     })),
     fittedButNotBought: fittedNotBought,
@@ -327,7 +342,11 @@ async function getMallStats(mallId, days = 30, minFittings = 2) {
     // ⑤ 업셀링 (2개 이상 동시 착장)
     upsell: {
       multiItemFittings: [...comboCount.values()].reduce((a, b) => a + b, 0),
-      topCombos: topN(comboCount).map(([productId, count]) => ({ productId, count })),
+      topCombos: topN(comboCount).map(([productId, count]) => ({
+        productId,
+        productName: labelOf(productId),
+        count,
+      })),
     },
 
     // 과금 / 원가 근거
