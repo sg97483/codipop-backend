@@ -126,6 +126,8 @@ function logFittingEvent(payload) {
 
     // 비용 / 성능
     model: safeStr(payload.model, 80),
+    tier: safeStr(payload.tier, 40),           // standard | premium | premium2k
+    imageSize: safeStr(payload.imageSize, 10), // 1K | 2K | 4K
     promptTokens,
     outputTokens,
     totalTokens: safeInt(payload.usage?.totalTokenCount),
@@ -332,6 +334,17 @@ async function getMallStats(mallId, days = 30, minFittings = 2) {
       billableFittings: success.length,
       estimatedCostKrw: Number(totalCostKrw.toFixed(0)),
       usdToKrw: USD_TO_KRW,
+      // 등급별 분리 — 청구서에 스탠다드/프리미엄을 나눠 적기 위한 근거
+      byTier: [...success.reduce((m, f) => {
+        const key = f.tier || 'unknown';
+        const cur = m.get(key) || { tier: key, count: 0, costKrw: 0 };
+        cur.count += 1;
+        cur.costKrw += f.estimatedCostKrw || 0;
+        return m.set(key, cur);
+      }, new Map()).values()].map((r) => ({
+        ...r,
+        costKrw: Number(r.costKrw.toFixed(0)),
+      })),
     },
   };
 }

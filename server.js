@@ -8,6 +8,7 @@ const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 const { firestore } = require('./firebase-admin.js');
 const { logFittingEvent, logConversionEvent, getMallStats } = require('./analytics.js');
+const { resolveTier, describeTierConfig } = require('./tiers.js');
 
 // --- 설정 ---
 const app = express();
@@ -28,9 +29,11 @@ app.use((req, res, next) => {
 // Google AI 설정 (신규 @google/genai SDK)
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// 1. 이미지 생성용 모델 (Nano Banana 2 Lite: 최저가 $0.034/장, 약 4초 생성)
-//    합성 품질이 아쉬우면 환경변수로 IMAGE_MODEL=gemini-3.1-flash-image (Nano Banana 2, $0.067/장) 지정
-const IMAGE_MODEL = process.env.IMAGE_MODEL || 'gemini-3.1-flash-lite-image';
+// 1. 이미지 생성 모델은 요금제 등급(tiers.js)에 따라 요청마다 결정된다.
+//    스탠다드: gemini-3.1-flash-lite-image 1K (실측 56.2원)
+//    프리미엄: gemini-3.1-flash-image 1K (실측 112.4원) — ENTERPRISE 협의 전용
+//    고객사별 매핑은 환경변수 TENANT_TIERS 로 지정한다.
+console.log('합성 엔진 등급 설정:', JSON.stringify(describeTierConfig()));
 
 // 2. 텍스트 생성용 모델 (구 gemini-1.5-flash-latest 대체, 더 저렴하고 빠름)
 const TEXT_MODEL = process.env.TEXT_MODEL || 'gemini-2.5-flash-lite';
@@ -124,6 +127,9 @@ app.post('/try-on', upload.any(), async (req, res) => {
   console.log(`[${requestId}] 이미지 처리 요청 받음 (다중 옷 이미지)...`);
   console.log(`[${requestId}] 요청 헤더:`, JSON.stringify(req.headers, null, 2));
 
+  // 요금제 등급 결정. 미등록 몰은 항상 스탠다드로 떨어진다.
+  const tier = resolveTier(req.body?.mallId);
+
   // 로깅용 컨텍스트 (실패 경로에서도 남겨야 하므로 try 밖에서 선언)
   let geminiMs = null;
   let usageMetadata = null;
@@ -136,7 +142,9 @@ app.post('/try-on', upload.any(), async (req, res) => {
       body: req.body,
       status: 'failed',
       errorMessage: message,
-      model: IMAGE_MODEL,
+      model: tier.model,
+      tier: tier.name,
+      imageSize: tier.imageSize,
       clothingCount,
       hasBodySize: hasBodySizeFlag,
       usage: usageMetadata,
@@ -240,15 +248,24 @@ app.post('/try-on', upload.any(), async (req, res) => {
       **Output ONLY the edited image.** Do not generate a new person or a new scene.
     `;
 
-    console.log(`[${requestId}] Gemini API 호출 시작 (모델: ${IMAGE_MODEL})...`);
+    console.log(
+      `[${requestId}] Gemini API 호출 시작 (등급: ${tier.name}, 모델: ${tier.model}, 해상도: ${tier.imageSize})...`,
+    );
     const geminiStart = Date.now();
 
     const response = await ai.models.generateContent({
-      model: IMAGE_MODEL,
+      model: tier.model,
       contents: [{ role: 'user', parts: [{ text: prompt }, ...imageParts] }],
       config: {
         // 낮은 temperature로 원본(인물/배경) 보존 일관성 강화
         temperature: 0.2,
+        imageConfig: {
+          // 해상도를 명시하지 않으면 모델 기본값에 의존한다. 2K 로 올라가면
+          // 원가가 3배가 되므로 등급에 정해진 값을 반드시 고정한다.
+          // aspectRatio 는 지정하지 않는다 — 프롬프트가 원본 비율 유지를
+          // 지시하고 있어 값을 강제하면 서로 충돌한다.
+          imageSize: tier.imageSize,
+        },
       },
     });
     geminiMs = Date.now() - geminiStart;
@@ -342,7 +359,9 @@ app.post('/try-on', upload.any(), async (req, res) => {
       requestId,
       body: req.body,
       status: 'success',
-      model: IMAGE_MODEL,
+      model: tier.model,
+      tier: tier.name,
+      imageSize: tier.imageSize,
       clothingCount,
       hasBodySize: hasBodySizeFlag,
       resultImageUrl: publicUrl,
