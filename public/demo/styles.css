@@ -713,6 +713,20 @@ body {
   font-weight: 700;
 }
 
+/* 몰 하단 → 사장님 백오피스 (영업 시연용 이동 링크) */
+.admin-link {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.admin-link:hover {
+  text-decoration: underline;
+}
+
 .hidden {
   display: none !important;
 }

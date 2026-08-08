@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>CodiPOP 백오피스 — AI 피팅 리포트</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./admin.css" />
+  </head>
+  <body>
+    <div class="admin">
+      <header class="admin-top">
+        <div>
+          <p class="eyebrow">CodiPOP 백오피스</p>
+          <h1>AI 피팅 리포트</h1>
+        </div>
+        <p class="admin-sub">
+          기존 쇼핑몰 통계로는 알 수 없던 <strong>소비자 잠재 선호 데이터</strong>를 제공합니다.
+        </p>
+      </header>
+
+      <!-- 필터: 차트 위 한 줄 -->
+      <form class="filters" id="filters">
+        <label>
+          쇼핑몰 ID
+          <input type="text" id="f-mall" value="demo-mall" autocomplete="off" />
+        </label>
+        <label>
+          기간
+          <select id="f-days">
+            <option value="7">최근 7일</option>
+            <option value="30" selected>최근 30일</option>
+            <option value="90">최근 90일</option>
+          </select>
+        </label>
+        <label>
+          최소 피팅 수
+          <select id="f-min">
+            <option value="1">1회 이상</option>
+            <option value="2" selected>2회 이상</option>
+            <option value="5">5회 이상</option>
+          </select>
+        </label>
+        <label class="token-field">
+          조회 토큰 <em>(설정된 경우)</em>
+          <input type="password" id="f-token" autocomplete="off" placeholder="STATS_TOKEN" />
+        </label>
+        <button type="submit" class="btn-primary" id="btn-load">조회</button>
+      </form>
+
+      <p class="status" id="status" role="status">기간을 선택하고 조회를 눌러 주세요.</p>
+
+      <main id="report" class="hidden">
+        <!-- ① AI 피팅 횟수 · ② 피팅 후 판매 연결 -->
+        <section class="kpi-row" aria-label="핵심 지표">
+          <div class="tile">
+            <p class="tile-label">AI 피팅 횟수</p>
+            <p class="tile-value" id="k-fittings">—</p>
+            <p class="tile-meta" id="k-fittings-meta">—</p>
+          </div>
+          <div class="tile">
+            <p class="tile-label">1인당 평균 피팅</p>
+            <p class="tile-value" id="k-avg">—</p>
+            <p class="tile-meta" id="k-avg-meta">—</p>
+          </div>
+          <div class="tile">
+            <p class="tile-label">피팅 후 구매 클릭</p>
+            <p class="tile-value" id="k-buy">—</p>
+            <p class="tile-meta" id="k-buy-meta">—</p>
+          </div>
+          <div class="tile tile-accent">
+            <p class="tile-label">피팅 → 구매 전환율</p>
+            <p class="tile-value" id="k-rate">—</p>
+            <p class="tile-meta" id="k-rate-meta">—</p>
+          </div>
+        </section>
+
+        <!-- ③ 가장 많이 입어본 옷 -->
+        <section class="card">
+          <div class="card-head">
+            <h2>가장 많이 입어본 옷</h2>
+            <p>고객이 실제로 관심을 보인 상품입니다.</p>
+          </div>
+          <div class="chart" id="chart-fitted"></div>
+        </section>
+
+        <!-- ⑤ 피팅했지만 안 산 상품 — 핵심 차별점 -->
+        <section class="card card-highlight">
+          <div class="card-head">
+            <h2>피팅했지만 사지 않은 상품</h2>
+            <p>
+              어디서도 얻을 수 없는 신호입니다. <strong>미구매율</strong> 순으로 정렬했습니다 —
+              절대 건수로 줄 세우면 인기 상품이 위로 올라와 실제 문제 상품이 묻힙니다.
+            </p>
+          </div>
+          <div class="chart" id="chart-missed"></div>
+        </section>
+
+        <!-- ④ 피팅 후 구매 순위 + ⑥ 업셀링 -->
+        <div class="grid-2">
+          <section class="card">
+            <div class="card-head">
+              <h2>피팅 후 구매 순위</h2>
+              <p>피팅을 거쳐 구매로 이어진 상품입니다.</p>
+            </div>
+            <div class="table-wrap">
+              <table id="t-bought">
+                <thead>
+                  <tr><th>순위</th><th>상품</th><th class="num">구매 클릭</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <h2>업셀링 (세트 피팅)</h2>
+              <p>두 벌 이상을 함께 입어본 횟수입니다.</p>
+            </div>
+            <div class="upsell">
+              <p class="upsell-value" id="u-total">—</p>
+              <p class="upsell-label">세트 피팅 횟수</p>
+            </div>
+            <div class="table-wrap">
+              <table id="t-upsell">
+                <thead>
+                  <tr><th>상품</th><th class="num">세트 피팅</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <!-- 청구 근거 -->
+        <section class="card">
+          <div class="card-head">
+            <h2>사용량 및 청구 근거</h2>
+            <p>성공한 피팅만 과금 대상입니다. 실패 건은 청구되지 않습니다.</p>
+          </div>
+          <div class="table-wrap">
+            <table id="t-billing">
+              <thead>
+                <tr><th>화질 등급</th><th class="num">건수</th><th class="num">추정 원가</th></tr>
+              </thead>
+              <tbody></tbody>
+              <tfoot></tfoot>
+            </table>
+          </div>
+          <p class="foot-note" id="billing-note"></p>
+        </section>
+
+        <!-- 원자료 -->
+        <details class="card raw">
+          <summary>원자료 보기 (JSON)</summary>
+          <pre id="raw"></pre>
+        </details>
+      </main>
+
+      <footer class="admin-foot">
+        Powered by <span>CodiPOP</span> ·
+        <span id="foot-meta">데이터 없음</span>
+      </footer>
+    </div>
+    <script src="./admin.js"></script>
+  </body>
+</html>
