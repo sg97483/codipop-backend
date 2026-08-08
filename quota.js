@@ -177,6 +177,21 @@ function recordFitting(mallId, success) {
   entry.count += 1;
 }
 
+/**
+ * 리포트용 사용량. 카운터가 비어 있으면 Firestore 에서 채운 뒤 돌려준다.
+ *
+ * `describeUsage` 를 그대로 쓰면 안 되는 이유:
+ * 카운터는 메모리에 있으므로 재배포 직후에는 0 이고, 시드는 `/try-on` 이
+ * 들어와야 일어난다. 그 사이 사장님이 리포트를 열면 **실제로 300건을 썼는데
+ * 0건으로 보입니다.** 청구 근거로 쓰는 숫자가 틀리게 보이면 신뢰를 잃는다.
+ */
+async function loadUsage(mallId, tenant) {
+  if (!mallId || mallId === 'app') return describeUsage(mallId, tenant);
+  const entry = getMonthlyEntry(mallId);
+  if (!entry.seeded) await seedFromFirestore(mallId, entry);
+  return describeUsage(mallId, tenant);
+}
+
 /** 리포트 화면에 그대로 올릴 수 있는 모양으로 사용량을 요약한다. */
 function describeUsage(mallId, tenant) {
   const plan = planOf(tenant);
@@ -210,4 +225,12 @@ function describeQuotaConfig() {
   };
 }
 
-module.exports = { PLANS, checkQuota, recordFitting, describeUsage, describeQuotaConfig, planOf };
+module.exports = {
+  PLANS,
+  checkQuota,
+  recordFitting,
+  loadUsage,
+  describeUsage,
+  describeQuotaConfig,
+  planOf,
+};

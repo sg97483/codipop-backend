@@ -20,7 +20,8 @@ const {
 } = require('./tenants.js');
 const { applyBrandWatermark } = require('./watermark.js');
 const { fetchRemoteImage } = require('./remote-image.js');
-const { checkQuota, recordFitting, describeUsage, describeQuotaConfig } = require('./quota.js');
+const { checkQuota, recordFitting, loadUsage, describeQuotaConfig } = require('./quota.js');
+const { resultPath, applyRetentionPolicy } = require('./storage-retention.js');
 const fs = require('fs');
 
 /**
@@ -82,6 +83,10 @@ if (process.env.GOOGLE_CREDENTIALS) {
   });
 }
 const bucket = storage.bucket('codipop-63c0d.firebasestorage.app');
+
+// 결과 이미지 보관 정책. 부팅 시 1회 적용하며 같은 규칙을 반복 적용해도 결과가 같다.
+// 실패해도 서버는 계속 뜬다 — 정책 적용 실패로 서비스가 멈추는 쪽이 더 나쁘다.
+applyRetentionPolicy(bucket).catch(() => {});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -477,7 +482,9 @@ app.post('/try-on', upload.any(), async (req, res) => {
       );
     }
 
-    const fileName = `results/${Date.now()}_result.jpeg`;
+    // 위젯 결과와 앱 결과를 다른 경로에 둔다.
+    // 앱 결과는 사용자가 '최근 코디'로 계속 보므로 자동 삭제 대상이 아니다. (storage-retention.js)
+    const fileName = resultPath(auth.mallId);
     const file = bucket.file(fileName);
 
     console.log(`[${requestId}] Firebase Storage에 이미지 업로드 시작...`);
@@ -712,13 +719,16 @@ app.get('/my/stats', async (req, res) => {
 
   try {
     const target = getTenant(mallId);
-    const stats = await getMallStats(mallId, days, minFittings);
+    const [stats, usage] = await Promise.all([
+      getMallStats(mallId, days, minFittings),
+      loadUsage(mallId, target),
+    ]);
     res.json({
       success: true,
       role,
       mallName: (target || {}).name || mallId,
       // 이번 달 사용량은 조회 기간(days)과 무관하다 — 청구는 항상 월 단위다.
-      usage: describeUsage(mallId, target),
+      usage,
       stats,
     });
   } catch (error) {
@@ -742,8 +752,11 @@ app.get('/stats/:mallId', async (req, res) => {
   }
 
   try {
-    const stats = await getMallStats(mallId, days, minFittings);
-    res.json({ success: true, usage: describeUsage(mallId, getTenant(mallId)), stats });
+    const [stats, usage] = await Promise.all([
+      getMallStats(mallId, days, minFittings),
+      loadUsage(mallId, getTenant(mallId)),
+    ]);
+    res.json({ success: true, usage, stats });
   } catch (error) {
     console.error('통계 조회 실패:', error.message);
     // 복합 색인이 없으면 Firestore 가 생성 URL을 에러 메시지에 담아준다.
