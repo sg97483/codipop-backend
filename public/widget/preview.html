@@ -126,6 +126,7 @@
         <p class="hint">
           숨긴 뒤에는 <b>사장님 몰의 실제 상품</b>에 착용해 보기 버튼이 붙은 화면만 보입니다.
           주소가 담긴 링크를 미리 만들어 두면 미팅에서 바로 열 수 있습니다.
+          상호가 호스트명으로 나오면 주소에 <b>&amp;mall=리린</b> 을 붙이세요.
         </p>
       </div>
     </div>
@@ -232,7 +233,10 @@
         }
 
         function render(product) {
-          els.shopName.textContent = product.siteName || '고객사 몰';
+          // 몰 이름은 `og:site_name` 이 비어 있으면 호스트명으로 떨어진다(리린이 그렇다).
+          // 영업 담당자는 진짜 상호를 아니까 ?mall= 로 덮어쓸 수 있게 한다.
+          els.shopName.textContent =
+            params.get('mall') || product.siteName || '고객사 몰';
           els.hero.src = product.image || '';
           els.hero.alt = product.name || '';
           els.name.textContent = product.name || '(상품명을 찾지 못했습니다)';

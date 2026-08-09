@@ -100,6 +100,34 @@ function guessSizes(title, html) {
 }
 
 /**
+ * 몰 이름.
+ *
+ * 미리보기 상단에 **그 몰의 이름**이 떠야 "우리 몰이네"가 됩니다.
+ * 그런데 국내 몰은 `og:site_name` 을 비워두는 경우가 많아(리린이 그렇습니다)
+ * 여러 단계로 추론합니다.
+ *
+ *   og:site_name → <title> 의 꼬리 조각("상품명 : 리린") → 호스트명
+ */
+function guessSiteName(html, titleTag, finalUrl) {
+  const og = readMeta(html, 'og:site_name');
+  if (og) return og;
+
+  // 국내 몰 상품명에는 `[size:S,M,L]` `[LABEL]` 같은 대괄호가 흔하고 그 안에 콜론이 들어간다.
+  // 먼저 걷어내지 않으면 "S,M,L][기본/숏기장]]" 같은 조각이 몰 이름으로 잡힌다.
+  const title = decodeEntities(titleTag || '').replace(/\[[^\]]*\]/g, ' ');
+  if (title) {
+    const parts = title.split(/[|:｜>»]/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      const tail = parts[parts.length - 1];
+      // 몰 이름은 짧고, 쉼표·괄호·숫자 나열이 없다. 아니면 상품명 조각이다.
+      if (tail.length > 0 && tail.length <= 20 && !/[,\[\]\/]/.test(tail)) return tail;
+    }
+  }
+
+  return finalUrl.hostname.replace(/^www\./, '');
+}
+
+/**
  * 상품 페이지 메타데이터를 읽어 위젯이 쓸 수 있는 모양으로 돌려준다.
  * 실패하면 예외를 던진다 — 영업 담당자에게 "왜 안 되는지" 를 보여줘야 한다.
  */
@@ -175,7 +203,7 @@ async function fetchProductMeta(rawUrl) {
       image: image ? new URL(image, finalUrl).href : '',
       price,
       sizes: guessSizes(name, html).slice(0, 40),
-      siteName: readMeta(html, 'og:site_name').slice(0, 40),
+      siteName: guessSiteName(html, titleTag, finalUrl).slice(0, 40),
     };
   } finally {
     clearTimeout(timer);
