@@ -24,7 +24,7 @@ if (process.env.GOOGLE_CREDENTIALS) {
       console.error('Firebase 초기화 실패:', error.message);
     }
     const firestore = admin.firestore();
-    module.exports = { firestore };
+    module.exports = { firestore, auth: admin.auth(), admin };
     return;
   }
 }
@@ -36,4 +36,6 @@ admin.initializeApp({
 
 const firestore = admin.firestore();
 
-module.exports = { firestore };
+// auth 는 앱 사용자의 ID 토큰 검증에 쓰인다 (app-auth.js).
+// 앱에 심어둔 키는 바이너리에서 추출되므로, 앱 요청의 보안 경계는 토큰이다.
+module.exports = { firestore, auth: admin.auth(), admin };

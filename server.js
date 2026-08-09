@@ -23,6 +23,12 @@ const { fetchRemoteImage } = require('./remote-image.js');
 const { fetchProductMeta } = require('./remote-page.js');
 const { checkQuota, recordFitting, loadUsage, describeQuotaConfig } = require('./quota.js');
 const { resultPath, applyRetentionPolicy, retentionStatus } = require('./storage-retention.js');
+const {
+  verifyAppUser,
+  checkTickets,
+  consumeTickets,
+  describeAppAuthConfig,
+} = require('./app-auth.js');
 const fs = require('fs');
 
 /**
@@ -64,6 +70,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 console.log('합성 엔진 등급 설정:', JSON.stringify(describeTierConfig()));
 console.log('고객사(테넌트) 설정:', JSON.stringify(describeTenantConfig()));
 console.log('호출 한도 설정:', JSON.stringify(describeQuotaConfig()));
+console.log('앱 인증 설정:', JSON.stringify(describeAppAuthConfig()));
 
 // 2. 텍스트 생성용 모델 (구 gemini-1.5-flash-latest 대체, 더 저렴하고 빠름)
 const TEXT_MODEL = process.env.TEXT_MODEL || 'gemini-2.5-flash-lite';
@@ -267,6 +274,27 @@ app.post('/try-on', upload.any(), async (req, res) => {
 
   // 요금제 등급 결정. 미등록 몰은 항상 스탠다드로 떨어진다.
   const tier = auth.tier;
+
+  // 앱 사용자 확인 + 티켓 잔액 검사.
+  //
+  // 지금까지 티켓은 앱에서만 막았고 서버는 쳐다보지도 않았다. `/try-on` 을 직접
+  // 호출하면 티켓 없이 무제한이며 건당 56.2원이 우리 카드에서 나간다.
+  // **토큰을 보내지 않는 구버전 앱은 그대로 통과시킨다** — 강제하면 업데이트 전 사용자가 전부 막힌다.
+  const appUser = await verifyAppUser(req.body?.idToken);
+  if (appUser && appUser.invalid) {
+    return res.status(401).json({ success: false, message: '로그인이 만료되었습니다. 다시 로그인해 주세요.' });
+  }
+  if (appUser) {
+    const tickets = await checkTickets(appUser);
+    if (!tickets.ok) {
+      return res.status(402).json({
+        success: false,
+        code: tickets.code,
+        message: `스타일 티켓이 부족합니다. (보유 ${tickets.balance}장 / 필요 ${tickets.cost}장)`,
+        ticketBalance: tickets.balance,
+      });
+    }
+  }
 
   // 호출 한도. **Gemini 를 부르기 전에** 판정한다 — 돈이 나간 뒤에 막으면 의미가 없다.
   const quota = await checkQuota({
@@ -556,6 +584,17 @@ app.post('/try-on', upload.any(), async (req, res) => {
 
     // 한도 카운터는 성공한 건만 센다 — 실패는 청구하지 않으므로 한도에서도 빼 준다.
     recordFitting(auth.mallId, true);
+
+    // 티켓도 **성공한 뒤에만** 차감한다 (앱의 기존 동작과 같다).
+    // 차감에 실패해도 결과는 그대로 돌려준다 — 여기서 막으면 돈은 나갔는데
+    // 사용자는 결과를 못 받는다.
+    if (appUser) {
+      const charged = await consumeTickets(appUser);
+      if (charged.balance !== null) responseData.ticketBalance = charged.balance;
+      console.log(
+        `[${requestId}] 티켓 차감 uid=${appUser.uid} -${charged.charged}장 → 잔액 ${charged.balance ?? '?'}`,
+      );
+    }
 
     // 이벤트 ID 를 함께 내려주면 클라이언트가 '구매 클릭'을 이 피팅에 연결할 수 있다.
     const fittingEventId = await logFittingEvent({
