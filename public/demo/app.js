@@ -54,11 +54,15 @@ function sendEvent(type, extra = {}) {
 const PRODUCTS = [
   {
     id: "top-01",
-    badge: "NEW · TOPS",
-    title: "언밸런스 코튼 티셔츠",
-    price: 89000,
-    priceLabel: "₩89,000",
-    desc: "비대칭 헴라인의 데일리 티셔츠. 상세의 착용해 보기로 내 핏을 바로 확인하세요.",
+    badge: "NEW",
+    tags: ["NEW", "BEST"],
+    title: "슬럽 코튼 반팔 블라우스",
+    price: 27700,
+    listPrice: 37000,   // 소비자가
+    salePrice: 31800,   // 판매가
+    reviewCount: 54,
+    colors: ["#f2efe8", "#3b3b3b", "#c8b7a6"],
+    desc: "[여름 신상] 슬럽 조직감이 살아있는 데일리 블라우스. 비침 없는 두께감으로 이너 부담이 없어요.",
     category: "TOPS",
     productSize: "F(55~66)", // 국내 몰에서 가장 흔한 표기 (프리 사이즈)
     image: "./assets/top.jpg",
@@ -66,11 +70,15 @@ const PRODUCTS = [
   },
   {
     id: "bottom-01",
-    badge: "BEST · BOTTOMS",
-    title: "와이드 데님 팬츠",
-    price: 128000,
-    priceLabel: "₩128,000",
-    desc: "여유 있는 실루엣의 데님. 피팅 후 바로 구매 페이지로 돌아올 수 있습니다.",
+    badge: "BEST",
+    tags: ["BEST", "오늘출발"],
+    title: "라이트업 와이드 밴딩 팬츠",
+    price: 33800,
+    listPrice: 52800,
+    salePrice: 43900,
+    reviewCount: 128,
+    colors: ["#e8e4dc", "#8a8f7a", "#2f3540"],
+    desc: "뒷밴딩으로 편안한 착용감. 한여름에도 시원하게 입을 수 있는 라이트 소재입니다.",
     category: "BOTTOMS",
     productSize: "S,M,L",
     image: "./assets/bottom.jpg",
@@ -78,17 +86,31 @@ const PRODUCTS = [
   },
   {
     id: "outer-01",
-    badge: "OUTER",
-    title: "울 블렌드 코트",
-    price: 249000,
-    priceLabel: "₩249,000",
-    desc: "시즌 아우터. 영세몰 상세에 붙는 위젯 데모용 샘플 상품입니다.",
+    badge: "MADE",
+    tags: ["MADE", "무료배송"],
+    title: "어텀 롤업 포켓 셔츠 자켓",
+    price: 60800,
+    listPrice: 74800,
+    salePrice: 69800,
+    reviewCount: 24,
+    colors: ["#4a5148", "#d8cfc2"],
+    desc: "여름 끝자락부터 간절기까지 활용도 만점. 가볍게 흐르는 소재와 여유로운 핏입니다.",
     category: "OUTER",
     productSize: "FREE",
     image: "./assets/outer.jpg",
     buyUrl: null,
   },
 ];
+
+/** 할인율 — 소비자가 대비 최종가. 국내 몰이 카드에 항상 붙이는 숫자다. */
+function discountRate(product) {
+  if (!product.listPrice || product.listPrice <= product.price) return 0;
+  return Math.round((1 - product.price / product.listPrice) * 100);
+}
+
+function won(value) {
+  return Number(value || 0).toLocaleString("ko-KR") + "원";
+}
 
 // 믹스매치 규칙 — AI 호출 없이 카테고리만으로 조합을 제안한다 (추가 비용 0원).
 // 기획서 슬라이드 13의 "하의를 보러 온 고객에게 상의까지 세트 판매" 시연용.
@@ -160,7 +182,7 @@ const els = {
   productHero: document.getElementById("product-hero"),
   productBadge: document.getElementById("product-badge"),
   productTitle: document.getElementById("product-title"),
-  productPrice: document.getElementById("product-price"),
+  productSpec: document.getElementById("product-spec"),
   productDesc: document.getElementById("product-desc"),
   tryonClothing: document.getElementById("tryon-clothing"),
   tryonClothing2: document.getElementById("tryon-clothing2"),
@@ -206,28 +228,64 @@ function showView(name) {
 }
 
 function renderHome() {
-  els.grid.innerHTML = PRODUCTS.map(
-    (p) => `
+  // 국내 모바일 몰의 상품 목록을 그대로 따른다 — 2열 그리드, 색상 칩,
+  // 할인율 + 최종가 + 소비자가 취소선, 리뷰 수. 사장님이 매일 보는 화면이라
+  // 이 배치가 맞아야 "우리 몰이랑 같네"가 된다.
+  els.grid.innerHTML = PRODUCTS.map((p) => {
+    const rate = discountRate(p);
+    const chips = (p.colors || [])
+      .map((c) => `<span class="chip" style="background:${c}"></span>`)
+      .join("");
+    const tags = (p.tags || [])
+      .map((t) => `<span class="tag">${t}</span>`)
+      .join("");
+    return `
     <button type="button" class="product-card" data-product-id="${p.id}">
-      <img src="${p.image}" alt="${p.title}" />
-      <div>
-        <p class="meta">${p.badge}</p>
-        <h3>${p.title}</h3>
-        <p class="price">${p.priceLabel}</p>
-      </div>
+      <span class="card-media">
+        <img src="${p.image}" alt="${p.title}" loading="lazy" />
+        <span class="card-heart" aria-hidden="true">♡</span>
+      </span>
+      <span class="card-body">
+        <span class="card-chips">${chips}</span>
+        <span class="card-title">${p.title}</span>
+        <span class="card-price">
+          ${rate ? `<em class="rate">${rate}%</em>` : ""}
+          <strong>${won(p.price)}</strong>
+          ${p.listPrice ? `<s>${won(p.listPrice)}</s>` : ""}
+        </span>
+        <span class="card-meta">${tags}<span class="review">리뷰 ${p.reviewCount || 0}개</span></span>
+      </span>
     </button>
-  `,
-  ).join("");
+  `;
+  }).join("");
 }
 
 function renderProduct() {
   const product = getProduct();
   els.productHero.src = product.image;
   els.productHero.alt = product.title;
-  els.productBadge.textContent = product.badge;
+  els.productBadge.textContent = (product.tags || []).join(" · ");
   els.productTitle.textContent = product.title;
-  els.productPrice.textContent = product.priceLabel;
   els.productDesc.textContent = product.desc;
+
+  // 국내 몰의 3단 가격 표기를 그대로 따른다 (리린·저스트원 모두 이 구조).
+  const rate = discountRate(product);
+  const rows = [
+    product.listPrice ? ["소비자가", `<s>${won(product.listPrice)}</s>`] : null,
+    product.salePrice ? ["판매가", won(product.salePrice)] : null,
+    [
+      "기간 할인가",
+      `<strong class="sale">${won(product.price)}</strong>${rate ? ` <em class="rate">${rate}% 할인</em>` : ""}`,
+    ],
+    ["사이즈", product.productSize || "표기 없음"],
+    ["적립금", "1%"],
+    ["배송비", "3,000원 (50,000원 이상 무료)"],
+    ["리뷰", `${product.reviewCount || 0}개`],
+  ].filter(Boolean);
+
+  els.productSpec.innerHTML = rows
+    .map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`)
+    .join("");
 }
 
 function getPartner() {
@@ -467,7 +525,7 @@ function renderMixMatch(product) {
     <div class="mix-card">
       <img src="${p.image}" alt="${p.title}" />
       <p class="mix-title">${p.title}</p>
-      <p class="mix-price">${p.priceLabel}</p>
+      <p class="mix-price">${won(p.price)}</p>
       <button type="button" class="btn-secondary mix-btn" data-mix-id="${p.id}">
         함께 피팅
       </button>

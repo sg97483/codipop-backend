@@ -20,6 +20,7 @@ const {
 } = require('./tenants.js');
 const { applyBrandWatermark } = require('./watermark.js');
 const { fetchRemoteImage } = require('./remote-image.js');
+const { fetchProductMeta } = require('./remote-page.js');
 const { checkQuota, recordFitting, loadUsage, describeQuotaConfig } = require('./quota.js');
 const { resultPath, applyRetentionPolicy, retentionStatus } = require('./storage-retention.js');
 const fs = require('fs');
@@ -212,6 +213,23 @@ app.get('/widget.js', (req, res) => {
   res.set('Cache-Control', 'public, max-age=600');
   res.type('application/javascript');
   res.sendFile(path.join(__dirname, 'public/widget/codipop.js'));
+});
+
+// 영업 미리보기 — 몰 상품 URL 하나로 그 몰 상품에 위젯이 붙은 화면을 만든다.
+// 미팅에서 데모몰의 가짜 상품 대신 **사장님 몰의 실제 상품**을 보여주기 위한 도구다.
+// 읽는 범위는 링크 미리보기와 같다 (OG 태그·JSON-LD). 페이지를 저장하지 않는다.
+app.get('/widget/product-meta', async (req, res) => {
+  // 아무나 우리 서버로 임의 주소를 긁게 두지 않는다 — 유효한 고객사 키가 있어야 한다.
+  if (!getTenantByApiKey(req.query.key)) {
+    return res.status(401).json({ success: false, message: '등록되지 않은 API 키입니다.' });
+  }
+  try {
+    const meta = await fetchProductMeta(req.query.url);
+    res.json({ success: true, product: meta });
+  } catch (error) {
+    console.warn(`상품 메타 조회 실패: ${error.message}`);
+    res.status(400).json({ success: false, message: error.message });
+  }
 });
 
 // 위젯 부팅용 공개 설정. dashboardToken 같은 비밀값은 절대 담지 않는다.

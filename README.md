@@ -36,6 +36,8 @@ node server.js        # 기본 포트 3000
 | GET | `/widget/config` | 위젯 부팅용 공개 정보 (`?key=pk_...`) |
 | GET | `/widget/fitting.html` | 위젯이 띄우는 iframe 피팅 화면 |
 | GET | `/widget/example.html` | **연동 예시 페이지 (고객사 전달용)** |
+| GET | `/widget/preview.html` | **고객사 맞춤 미리보기 (영업용)** — 몰 상품 URL 하나로 시연 화면 생성 |
+| GET | `/widget/product-meta` | 상품 페이지 메타데이터 추출 (`?key=pk_...&url=...`) |
 | GET | `/demo/` | 파일럿 몰 제휴용 웹 데모 |
 | GET | `/app-ads.txt` | AdMob 퍼블리셔 인증 |
 
@@ -190,6 +192,25 @@ GET /stats/demo-mall?days=30&minFittings=2&token=<토큰>
 | `public/widget/fitting.html` `.css` `.js` | iframe 안의 피팅 화면 |
 | `public/widget/example.html` | 연동 예시 + 속성 설명 (고객사 전달용) |
 | `public/widget/size-recommend.js` | 사이즈 추천 (데모와 동일 로직) |
+
+### 고객사 맞춤 미리보기 (`/widget/preview.html`)
+
+미팅에서 **데모몰의 가짜 상품 대신 사장님 몰의 실제 상품**을 보여주기 위한 영업 도구입니다.
+
+```
+/widget/preview.html?key=pk_...&url=<몰 상품 페이지 주소>&clean=1
+```
+
+상품 주소를 넣으면 그 몰의 이름·상품명·가격·이미지·사이즈를 읽어와 국내 모바일 몰
+상세처럼 배치하고, 그 위에 위젯 버튼을 실제로 띄웁니다. `clean=1` 이면 영업용 상단 바가
+숨겨져 시연 화면만 남습니다. **미팅 전에 링크를 만들어 두면 그 자리에서 바로 열 수 있습니다.**
+
+읽는 범위는 링크 미리보기와 같습니다 — OG 태그와 JSON-LD `Product`.
+페이지를 저장하지 않고 응답 후 버립니다. SSRF 방어는 `remote-image.js` 와 공유합니다.
+
+> ⚠️ 이 화면은 남의 몰 상세를 흉내 냅니다. 표시가 없으면 스크린샷이 돌아다닐 때
+> "그 몰이 이미 코디팝을 붙였다"로 오해되므로, **접어도 남는 안내 문구**를 하단에 고정했습니다.
+> 지우지 마세요.
 
 ### 설계 결정 세 가지
 

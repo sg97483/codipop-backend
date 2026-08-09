@@ -138,4 +138,4 @@ async function fetchRemoteImage(rawUrl, fieldname = 'clothing') {
   }
 }
 
-module.exports = { fetchRemoteImage, isPrivateAddress };
+module.exports = { fetchRemoteImage, isPrivateAddress, assertPublicHost };

@@ -96,55 +96,131 @@ body {
 
 .product-grid {
   display: grid;
-  gap: 14px;
+  /* 국내 몰 앱은 예외 없이 2열이다. 넓은 화면에서만 3열로 늘린다. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 12px;
   margin-top: 18px;
 }
 
+@media (min-width: 720px) {
+  .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ── 상품 카드 — 국내 모바일 몰의 2열 그리드를 따른다 ────────── */
 .product-card {
-  display: grid;
-  grid-template-columns: 112px 1fr;
-  gap: 14px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  font: inherit;
+  color: inherit;
+  /* 그리드 항목의 기본 min-width 는 콘텐츠 크기다. 풀어주지 않으면
+     이미지·상품명이 트랙을 밀어 2열이 화면 밖으로 넘친다. */
+  min-width: 0;
 }
 
-.product-card:hover,
-.product-card:focus-visible {
-  transform: translateY(-1px);
-  border-color: #b9ae9c;
-  outline: none;
-}
+.product-card > * { min-width: 0; }
 
-.product-card img {
-  width: 112px;
-  height: 140px;
-  object-fit: cover;
-  border-radius: 12px;
+.card-media {
+  position: relative;
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
   background: #ece6da;
 }
 
-.product-card h3 {
-  margin: 0 0 6px;
-  font-size: 16px;
-  line-height: 1.35;
+.product-card img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  transition: transform 0.25s ease;
 }
 
-.product-card .meta {
-  margin: 0;
+.product-card:hover img,
+.product-card:focus-visible img { transform: scale(1.03); }
+.product-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+.card-heart {
+  position: absolute;
+  right: 8px; bottom: 8px;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.86);
+  font-size: 14px;
+  color: #6d6a63;
+}
+
+.card-body { display: flex; flex-direction: column; gap: 5px; }
+
+.card-chips { display: flex; gap: 4px; }
+.chip {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.card-title {
+  font-size: 13.5px;
+  line-height: 1.45;
+  /* 한글은 어절 단위로 끊고, 긴 영문·모델명은 강제로 줄바꿈한다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-price {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.card-price strong { font-size: 15px; font-weight: 800; }
+.card-price s { color: var(--muted); font-size: 12px; }
+.rate { font-style: normal; font-weight: 800; color: #f2513d; font-size: 15px; }
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
   color: var(--muted);
+}
+.tag {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #efe9dd;
+  color: #6d6a63;
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+.review { color: var(--muted); }
+
+/* ── 상세 스펙 표 (국내 몰의 3단 가격 표기) ─────────────────── */
+.spec { margin: 16px 0 0; border-top: 1px solid var(--line); }
+.spec div {
+  display: flex;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
   font-size: 13px;
 }
-
-.product-card .price {
-  margin-top: 10px;
-  font-weight: 700;
-  font-size: 15px;
-}
+.spec dt { flex: 0 0 84px; margin: 0; color: var(--muted); }
+.spec dd { margin: 0; }
+.spec s { color: var(--muted); }
+.spec .sale { font-size: 16px; font-weight: 800; }
+.spec .rate { font-size: 12px; margin-left: 4px; }
 
 .mall-foot {
   margin-top: 28px;

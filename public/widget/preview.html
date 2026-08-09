@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>고객사 맞춤 미리보기 — CodiPOP</title>
+    <style>
+      /* 국내 모바일 쇼핑몰 상세를 흉내 낸다. 사장님이 매일 보는 화면과 닮아야
+         "우리 몰에 붙으면 이렇게 되는구나"가 즉시 전달된다. */
+      * { box-sizing: border-box; }
+      :root {
+        --ink: #16181c;
+        --muted: #8a8f98;
+        --line: #ececee;
+        --sale: #f2513d;
+        --page: #f4f4f5;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+          "Pretendard", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      /* ── 영업 담당자용 상단 바 (사장님께는 접어두고 보여주세요) ── */
+      .toolbar {
+        background: #10525f; color: #fff;
+        padding: 12px 16px;
+      }
+      .toolbar-inner { max-width: 900px; margin: 0 auto; }
+      .toolbar h1 { margin: 0 0 8px; font-size: 14px; font-weight: 700; }
+      .toolbar form { display: flex; gap: 8px; flex-wrap: wrap; }
+      .toolbar input {
+        flex: 1 1 320px; min-width: 0;
+        padding: 9px 11px; border: 0; border-radius: 8px;
+        font: inherit; font-size: 14px;
+      }
+      .toolbar button {
+        padding: 9px 16px; border: 0; border-radius: 8px;
+        background: #fff; color: #10525f;
+        font: inherit; font-weight: 700; font-size: 14px; cursor: pointer;
+      }
+      .toolbar button:disabled { opacity: 0.5; cursor: default; }
+      .toolbar .hint { margin: 8px 0 0; font-size: 12px; color: #a9cdd4; }
+      .toolbar .hint b { color: #fff; }
+      .toolbar[hidden] { display: none; }
+
+      .status { max-width: 900px; margin: 0 auto; padding: 10px 16px; font-size: 13px; color: var(--muted); }
+      .status.error { color: var(--sale); }
+
+      /* ── 몰 상세 흉내 ─────────────────────────────── */
+      .shop { max-width: 480px; margin: 0 auto; background: #fff; min-height: 100vh; }
+      .shop-top {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 16px; border-bottom: 1px solid var(--line);
+      }
+      .shop-name { font-weight: 800; letter-spacing: 0.02em; font-size: 16px; }
+      .shop-icons { color: var(--muted); font-size: 13px; }
+
+      .hero { width: 100%; display: block; background: #eee; aspect-ratio: 3/4; object-fit: cover; }
+
+      .body { padding: 18px 16px 40px; }
+      .name { margin: 0 0 12px; font-size: 17px; font-weight: 600; line-height: 1.45; }
+
+      .price-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+      .discount { color: var(--sale); font-weight: 800; font-size: 20px; }
+      .price { font-size: 20px; font-weight: 800; }
+      .was { color: var(--muted); text-decoration: line-through; font-size: 14px; }
+
+      .spec { margin: 16px 0 0; border-top: 1px solid var(--line); }
+      .spec div {
+        display: flex; gap: 12px; padding: 9px 0;
+        border-bottom: 1px solid var(--line); font-size: 13px;
+      }
+      .spec dt { width: 76px; color: var(--muted); flex: 0 0 auto; margin: 0; }
+      .spec dd { margin: 0; }
+
+      .buy {
+        width: 100%; margin-top: 18px; padding: 15px;
+        border: 1px solid #d5d7db; background: #fff;
+        border-radius: 8px; font: inherit; font-weight: 700; cursor: pointer;
+      }
+
+      .foot-note {
+        margin: 22px 0 0; padding-top: 16px; border-top: 1px dashed var(--line);
+        font-size: 12px; color: var(--muted); line-height: 1.7;
+      }
+
+      /* 이 화면은 남의 몰 상세를 흉내 냅니다. 표시가 없으면 스크린샷이 돌아다닐 때
+         "그 몰이 이미 코디팝을 붙였다"로 오해될 수 있어, 접어도 남는 표식을 둡니다. */
+      .disclaimer {
+        max-width: 480px; margin: 0 auto;
+        padding: 10px 16px 24px;
+        background: #fff;
+        font-size: 11.5px; line-height: 1.6; color: var(--muted);
+        text-align: center;
+        border-top: 1px solid var(--line);
+      }
+      .disclaimer b { color: #10525f; }
+      .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <!--
+      영업 담당자가 미팅 직전에 상품 주소를 넣고, 사장님께 보여줄 때는 상단 바를 접습니다.
+      아래 '몰 상세'는 그 몰의 실제 상품 정보로 채워지고, '착용해 보기' 버튼은
+      우리가 그린 것이 아니라 위젯 스크립트가 스스로 만든 것입니다.
+    -->
+    <div class="toolbar" id="toolbar">
+      <div class="toolbar-inner">
+        <h1>고객사 맞춤 미리보기 · 영업용</h1>
+        <form id="load-form">
+          <input
+            type="url"
+            id="input-url"
+            placeholder="쇼핑몰 상품 페이지 주소를 붙여넣으세요"
+            autocomplete="off"
+            required
+          />
+          <button type="submit" id="btn-load">불러오기</button>
+          <button type="button" id="btn-hide">상단 바 숨기기</button>
+        </form>
+        <p class="hint">
+          숨긴 뒤에는 <b>사장님 몰의 실제 상품</b>에 착용해 보기 버튼이 붙은 화면만 보입니다.
+          주소가 담긴 링크를 미리 만들어 두면 미팅에서 바로 열 수 있습니다.
+        </p>
+      </div>
+    </div>
+
+    <p class="status" id="status">상품 주소를 넣고 불러오기를 눌러 주세요.</p>
+
+    <main class="shop" id="shop" hidden>
+      <div class="shop-top">
+        <span class="shop-name" id="shop-name">SHOP</span>
+        <span class="shop-icons">☰ &nbsp; ♡ &nbsp; 🛒</span>
+      </div>
+
+      <img class="hero" id="hero" alt="" />
+
+      <div class="body">
+        <h2 class="name" id="name"></h2>
+
+        <div class="price-row">
+          <span class="discount" id="discount" hidden></span>
+          <span class="price" id="price"></span>
+          <span class="was" id="was" hidden></span>
+        </div>
+
+        <dl class="spec">
+          <div><dt>사이즈</dt><dd id="spec-size">-</dd></div>
+          <div><dt>배송비</dt><dd>3,000원 (50,000원 이상 무료)</dd></div>
+          <div><dt>적립금</dt><dd>1%</dd></div>
+        </dl>
+
+        <button type="button" class="buy">바로 구매</button>
+
+        <!-- 위젯이 버튼을 넣을 자리. 속성은 불러온 상품 정보로 채워진다. -->
+        <div id="codipop-slot"></div>
+
+        <p class="foot-note" id="foot-note"></p>
+      </div>
+    </main>
+
+    <div class="empty" id="empty" hidden>불러온 상품이 없습니다.</div>
+
+    <p class="disclaimer" id="disclaimer" hidden>
+      <b>CodiPOP 미리보기 화면입니다.</b> 실제 쇼핑몰 페이지가 아니며,
+      상품 정보는 해당 몰의 공개 페이지에서 읽어와 배치만 흉내 낸 것입니다.
+    </p>
+
+    <script>
+      (function () {
+        var API_ORIGIN = location.origin;
+        var params = new URLSearchParams(location.search);
+        var KEY = params.get('key') || 'pk_demo_mall';
+
+        var els = {
+          toolbar: document.getElementById('toolbar'),
+          form: document.getElementById('load-form'),
+          url: document.getElementById('input-url'),
+          btn: document.getElementById('btn-load'),
+          hide: document.getElementById('btn-hide'),
+          status: document.getElementById('status'),
+          shop: document.getElementById('shop'),
+          shopName: document.getElementById('shop-name'),
+          hero: document.getElementById('hero'),
+          name: document.getElementById('name'),
+          price: document.getElementById('price'),
+          was: document.getElementById('was'),
+          discount: document.getElementById('discount'),
+          specSize: document.getElementById('spec-size'),
+          slot: document.getElementById('codipop-slot'),
+          foot: document.getElementById('foot-note'),
+        };
+
+        function setStatus(text, isError) {
+          els.status.textContent = text;
+          els.status.classList.toggle('error', Boolean(isError));
+        }
+
+        function won(n) {
+          return Number(n || 0).toLocaleString('ko-KR') + '원';
+        }
+
+        /**
+         * 위젯을 이 상품으로 붙인다.
+         * 스크립트는 한 번만 넣고, 이후에는 CodiPOP.mount() 로 다시 붙인다.
+         */
+        function mountWidget(product) {
+          els.slot.innerHTML = '';
+          var host = document.createElement('div');
+          host.setAttribute('data-codipop-button', '');
+          host.setAttribute('data-codipop-product', product.id || 'preview');
+          host.setAttribute('data-codipop-name', product.name || '');
+          host.setAttribute('data-codipop-price', String(product.price || 0));
+          host.setAttribute('data-codipop-image', product.image || '');
+          host.setAttribute('data-codipop-buy', product.url || location.href);
+          if (product.sizes) host.setAttribute('data-codipop-sizes', product.sizes);
+          els.slot.appendChild(host);
+
+          if (window.CodiPOP) {
+            window.CodiPOP.mount();
+            return;
+          }
+          var script = document.createElement('script');
+          script.src = API_ORIGIN + '/widget.js';
+          script.setAttribute('data-codipop-key', KEY);
+          document.body.appendChild(script);
+        }
+
+        function render(product) {
+          els.shopName.textContent = product.siteName || '고객사 몰';
+          els.hero.src = product.image || '';
+          els.hero.alt = product.name || '';
+          els.name.textContent = product.name || '(상품명을 찾지 못했습니다)';
+
+          if (product.price) {
+            els.price.textContent = won(product.price);
+            els.price.hidden = false;
+          } else {
+            els.price.textContent = '가격 정보 없음';
+          }
+
+          els.specSize.textContent = product.sizes || '표기 없음';
+
+          var missing = [];
+          if (!product.image) missing.push('이미지');
+          if (!product.price) missing.push('가격');
+          if (!product.sizes) missing.push('사이즈');
+          els.foot.textContent = missing.length
+            ? '자동으로 찾지 못한 항목: ' + missing.join(' · ') +
+              '. 실제 연동 시에는 몰이 상품 속성으로 직접 넣어주므로 정확해집니다.'
+            : '이 페이지의 상품 정보는 해당 몰의 공개 페이지에서 읽어온 것입니다.';
+
+          els.shop.hidden = false;
+          document.getElementById('disclaimer').hidden = false;
+          mountWidget(product);
+        }
+
+        function load(rawUrl) {
+          if (!rawUrl) return;
+          els.btn.disabled = true;
+          setStatus('상품 정보를 불러오는 중…');
+
+          fetch(
+            API_ORIGIN + '/widget/product-meta?key=' + encodeURIComponent(KEY) +
+              '&url=' + encodeURIComponent(rawUrl),
+          )
+            .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, d: d }; }); })
+            .then(function (r) {
+              if (!r.ok || !r.d.success) throw new Error(r.d.message || '불러오지 못했습니다.');
+              render(r.d.product);
+              setStatus('불러왔습니다. 상단 바를 숨기고 사장님께 보여주세요.');
+            })
+            .catch(function (error) {
+              setStatus(error.message || '불러오지 못했습니다.', true);
+            })
+            .finally(function () {
+              els.btn.disabled = false;
+            });
+        }
+
+        els.form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var value = els.url.value.trim();
+          // 주소를 URL 에 남겨두면 같은 링크로 다시 열 수 있다 (미팅 전에 준비).
+          var next = new URLSearchParams(location.search);
+          next.set('url', value);
+          history.replaceState(null, '', location.pathname + '?' + next.toString());
+          load(value);
+        });
+
+        els.hide.addEventListener('click', function () {
+          els.toolbar.hidden = true;
+          els.status.hidden = true;
+        });
+
+        var preset = params.get('url');
+        if (preset) {
+          els.url.value = preset;
+          load(preset);
+          if (params.get('clean') === '1') {
+            els.toolbar.hidden = true;
+            els.status.hidden = true;
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>
