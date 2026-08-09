@@ -186,6 +186,34 @@ GET /stats/demo-mall?days=30&minFittings=2&token=<토큰>
 
 **동작하는 예시 페이지: `/widget/example.html`** — 고객사에 이 링크를 보내면 됩니다.
 
+### 상품이 1,000개여도 작업은 한 번
+
+임대몰의 상품 상세는 **템플릿 1개**입니다. 상품마다 페이지가 따로 있는 게 아니라 같은
+템플릿에 데이터만 갈아끼우므로, **작업량이 상품 수와 무관**합니다.
+
+HTML 을 아예 안 만지는 경로도 있습니다 — 구매 버튼 셀렉터만 주면 됩니다.
+
+```html
+<script src="https://codipop-backend.onrender.com/widget.js"
+        data-codipop-key="pk_..."
+        data-codipop-after=".btn-buy"
+        data-codipop-product-param="branduid"
+        data-codipop-name-selector=".prd-name"
+        data-codipop-price-selector=".prd-price"></script>
+```
+
+| 속성 | 동작 |
+|---|---|
+| `data-codipop-after` / `before` / `into` | 그 요소 뒤 / 앞 / 안쪽에 버튼을 넣는다. **같은 셀렉터가 여러 개면 첫 번째에만** 붙인다 (상·하단·플로팅 구매 버튼이 흔하다) |
+| `data-codipop-product-param` | 상품 코드를 **주소 쿼리**에서 읽는다. 카페24는 `?branduid=…` 라 이 한 줄로 상품별 리포트가 정확해진다 |
+| `data-codipop-name-selector` 등 | 상품명·가격·이미지를 셀렉터로 읽는다 |
+
+**구매 버튼이 나중에 그려지는 페이지도 됩니다** — `MutationObserver` 로 최대 10초간
+기다렸다가 붙입니다. 국내 몰은 스크립트로 늦게 그리는 경우가 흔합니다.
+
+배치 우선순위는 `[data-codipop-button]` → `[data-codipop-product]` → 셀렉터입니다.
+앞쪽일수록 몰이 명시한 것이라 정확합니다.
+
 | 파일 | 역할 |
 |---|---|
 | `public/widget/codipop.js` | 로더. 버튼 주입 + iframe 오버레이 + postMessage |

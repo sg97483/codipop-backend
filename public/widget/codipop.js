@@ -47,10 +47,67 @@
     }
   })();
 
-  var KEY = self.getAttribute('data-codipop-key') || self.getAttribute('data-key') || '';
-  var BUTTON_TEXT = self.getAttribute('data-codipop-text') || '착용해 보기';
+  function conf(name) {
+    var v = self.getAttribute('data-codipop-' + name);
+    return v ? v.trim() : '';
+  }
+
+  var KEY = conf('key') || self.getAttribute('data-key') || '';
+  var BUTTON_TEXT = conf('text') || '착용해 보기';
   // 자동 삽입을 끄고 window.CodiPOP.open() 으로만 열고 싶은 몰을 위한 스위치
   var AUTO = self.getAttribute('data-codipop-auto') !== 'false';
+
+  // --- 셀렉터 배치 ---
+  //
+  // **상품이 1,000개여도 몰이 하는 일은 이 스크립트 한 줄뿐이어야 한다.**
+  // 임대몰은 상품 상세가 템플릿 1개라 작업이 1회로 끝나지만, 그마저도
+  // "HTML 어디에 div 를 넣죠?"에서 막히는 담당자가 나온다.
+  // 셀렉터를 주면 우리가 알아서 그 옆에 버튼을 만든다 — 몰은 HTML 을 건드리지 않는다.
+  //
+  //   <script src=".../widget.js" data-codipop-key="pk_..."
+  //           data-codipop-after=".btn-buy"
+  //           data-codipop-product-param="branduid"></script>
+  var PLACE = { after: conf('after'), before: conf('before'), into: conf('into') };
+
+  // 상품 정보도 셀렉터로 읽을 수 있게 한다. 속성을 못 넣는 몰을 위한 경로다.
+  var PICK = { name: conf('name-selector'), price: conf('price-selector'), image: conf('image-selector') };
+
+  // 상품 코드를 주소의 쿼리에서 가져온다. 카페24는 `?branduid=1170620` 이라
+  // 이 한 줄이면 상품별 리포트가 정확해진다.
+  var PRODUCT_PARAM = conf('product-param');
+
+  function pickText(selector) {
+    if (!selector) return '';
+    try {
+      var el = document.querySelector(selector);
+      return el ? (el.textContent || '').trim() : '';
+    } catch (e) {
+      console.warn('[CodiPOP] 셀렉터가 올바르지 않습니다:', selector);
+      return '';
+    }
+  }
+
+  function pickImage(selector) {
+    if (!selector) return '';
+    try {
+      var el = document.querySelector(selector);
+      if (!el) return '';
+      if (el.tagName === 'IMG') return el.src || '';
+      var img = el.querySelector('img');
+      return img ? img.src || '' : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function productFromUrl() {
+    if (!PRODUCT_PARAM) return '';
+    try {
+      return new URLSearchParams(location.search).get(PRODUCT_PARAM) || '';
+    } catch (e) {
+      return '';
+    }
+  }
 
   if (!KEY) {
     console.error('[CodiPOP] data-codipop-key 가 없습니다. 발급받은 공개 키를 넣어 주세요.');
@@ -111,17 +168,24 @@
     return digits ? parseInt(digits.slice(0, 10), 10) : 0;
   }
 
+  /**
+   * 상품 정보 수집. 우선순위는 **정확한 것부터**다.
+   *   data 속성 → 몰이 지정한 셀렉터 → OG 메타 → 페이지 구조 추론
+   * 앞쪽일수록 몰이 명시한 값이라 리포트가 정확해진다.
+   */
   function collectProduct(host) {
     var image =
       absoluteUrl(attr(host, 'image')) ||
+      absoluteUrl(pickImage(PICK.image)) ||
       absoluteUrl(biggestImage(host && host.parentElement)) ||
       absoluteUrl(meta('og:image')) ||
       absoluteUrl(biggestImage(document));
 
     return {
-      id: attr(host, 'product') || attr(host, 'id') || location.pathname,
-      name: attr(host, 'name') || meta('og:title') || document.title || '',
-      price: parsePrice(attr(host, 'price')),
+      // 상품 코드가 없으면 리포트가 상품별로 쪼개지지 않는다 — 주소에서라도 건진다.
+      id: attr(host, 'product') || attr(host, 'id') || productFromUrl() || location.pathname,
+      name: attr(host, 'name') || pickText(PICK.name) || meta('og:title') || document.title || '',
+      price: parsePrice(attr(host, 'price') || pickText(PICK.price)),
       image: image,
       category: attr(host, 'category') || '',
       sizes: attr(host, 'sizes') || '',
@@ -269,35 +333,97 @@
     return btn;
   }
 
+  /** 셀렉터로 지정된 자리에 버튼을 넣는다. HTML 을 몰이 건드리지 않아도 되는 경로. */
+  function mountBySelector() {
+    var mode = PLACE.after ? 'after' : PLACE.before ? 'before' : PLACE.into ? 'into' : '';
+    if (!mode) return 0;
+
+    var selector = PLACE[mode];
+    var targets;
+    try {
+      targets = document.querySelectorAll(selector);
+    } catch (e) {
+      console.error('[CodiPOP] 셀렉터가 올바르지 않습니다:', selector);
+      return 0;
+    }
+    if (!targets.length) return 0;
+
+    // 상세 페이지에 구매 버튼이 여러 개인 경우가 흔하다(상단·하단·플로팅).
+    // 전부에 붙이면 버튼이 도배되므로 **첫 번째 하나만** 쓴다.
+    var target = targets[0];
+    if (target.__codipopMounted) return 1;
+    target.__codipopMounted = true;
+
+    // 호스트는 속성 없는 빈 div — 상품 정보는 셀렉터·OG 로 채워진다.
+    var host = document.createElement('div');
+    host.setAttribute('data-codipop-slot', '');
+    host.appendChild(makeButton(host));
+
+    if (mode === 'into') target.appendChild(host);
+    else if (mode === 'before') target.parentNode.insertBefore(host, target);
+    else target.parentNode.insertBefore(host, target.nextSibling);
+
+    return 1;
+  }
+
   function mount() {
-    if (!AUTO) return;
+    if (!AUTO) return 0;
+    var placed = 0;
 
     // 1순위: 몰이 직접 위치를 지정한 경우
     var slots = document.querySelectorAll('[data-codipop-button]');
-    if (slots.length) {
-      for (var i = 0; i < slots.length; i++) {
-        if (slots[i].__codipopMounted) continue;
-        slots[i].__codipopMounted = true;
-        slots[i].appendChild(makeButton(slots[i]));
-      }
-      return;
+    for (var i = 0; i < slots.length; i++) {
+      if (slots[i].__codipopMounted) continue;
+      slots[i].__codipopMounted = true;
+      slots[i].appendChild(makeButton(slots[i]));
+      placed++;
     }
+    if (placed) return placed;
 
     // 2순위: 상품 정보만 표시된 경우 그 요소 뒤에 붙인다
     var hosts = document.querySelectorAll('[data-codipop-product]');
     for (var j = 0; j < hosts.length; j++) {
       if (hosts[j].__codipopMounted) continue;
       hosts[j].__codipopMounted = true;
-      var btn = makeButton(hosts[j]);
-      hosts[j].appendChild(btn);
+      hosts[j].appendChild(makeButton(hosts[j]));
+      placed++;
     }
+    if (placed) return placed;
 
-    if (!slots.length && !hosts.length) {
+    // 3순위: 셀렉터 배치 — 몰이 HTML 을 한 줄도 안 만지는 경로
+    placed = mountBySelector();
+    if (placed) return placed;
+
+    return 0;
+  }
+
+  /**
+   * 늦게 그려지는 페이지 대비.
+   * 국내 몰은 구매 버튼을 스크립트로 나중에 그리는 경우가 많아,
+   * DOMContentLoaded 시점에는 셀렉터가 아무것도 못 찾는다.
+   * 붙을 때까지 잠깐 지켜보되, 무한히 돌지 않도록 시간을 끊는다.
+   */
+  function mountWithRetry() {
+    if (mount()) return;
+
+    var observer = new MutationObserver(function () {
+      if (mount()) stop();
+    });
+    var timer = setTimeout(function () {
+      stop();
       console.warn(
         '[CodiPOP] 버튼을 넣을 위치를 찾지 못했습니다. ' +
-          '상품 상세의 구매 버튼 근처에 <div data-codipop-button data-codipop-product="상품ID"></div> 를 넣어 주세요.',
+          'data-codipop-after 에 구매 버튼 셀렉터를 주거나, ' +
+          '상품 상세에 <div data-codipop-button data-codipop-product="상품코드"></div> 를 넣어 주세요.',
       );
+    }, 10000);
+
+    function stop() {
+      observer.disconnect();
+      clearTimeout(timer);
     }
+
+    observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
   // --- 공개 API ---
@@ -318,8 +444,8 @@
   };
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mount);
+    document.addEventListener('DOMContentLoaded', mountWithRetry);
   } else {
-    mount();
+    mountWithRetry();
   }
 })();
