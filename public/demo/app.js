@@ -60,7 +60,7 @@ const PRODUCTS = [
     priceLabel: "₩89,000",
     desc: "비대칭 헴라인의 데일리 티셔츠. 상세의 착용해 보기로 내 핏을 바로 확인하세요.",
     category: "TOPS",
-    productSize: "M", // 상품 표기 사이즈 — 내 추천과 비교해 보여준다
+    productSize: "F(55~66)", // 국내 몰에서 가장 흔한 표기 (프리 사이즈)
     image: "./assets/top.jpg",
     buyUrl: null,
   },
@@ -72,7 +72,7 @@ const PRODUCTS = [
     priceLabel: "₩128,000",
     desc: "여유 있는 실루엣의 데님. 피팅 후 바로 구매 페이지로 돌아올 수 있습니다.",
     category: "BOTTOMS",
-    productSize: "L",
+    productSize: "S,M,L",
     image: "./assets/bottom.jpg",
     buyUrl: null,
   },
@@ -84,7 +84,7 @@ const PRODUCTS = [
     priceLabel: "₩249,000",
     desc: "시즌 아우터. 영세몰 상세에 붙는 위젯 데모용 샘플 상품입니다.",
     category: "OUTER",
-    productSize: "M",
+    productSize: "FREE",
     image: "./assets/outer.jpg",
     buyUrl: null,
   },
@@ -433,11 +433,24 @@ function renderSizeRecommendation(product) {
     productSize: product.productSize,
   });
 
-  els.sizeValue.textContent = result.recommendedSize;
-  els.sizeReason.textContent = window.CodiPopSize.formatSizeReason(result);
+  // 상품이 실제로 파는 사이즈에 맞춰 번역한다.
+  // 국내 몰은 프리 사이즈가 흔해서, 그대로 두면 "L을 추천합니다"처럼
+  // **그 상품에 없는 사이즈**를 말하게 된다. (product-size.js 참조)
+  const offered = window.CodiPopProductSize
+    ? window.CodiPopProductSize.describeForProduct(result.recommendedSize, product.productSize)
+    : null;
+
+  if (offered) {
+    els.sizeValue.textContent = offered.badge;
+    els.sizeReason.textContent = `${offered.headline} — ${offered.detail}`;
+  } else {
+    els.sizeValue.textContent = result.recommendedSize;
+    els.sizeReason.textContent = window.CodiPopSize.formatSizeReason(result);
+  }
+
   els.sizeMeta.textContent =
     `${body.heightCm}cm · ${body.weightKg}kg · BMI ${result.bmi}` +
-    (product.productSize ? ` · 상품 표기 ${product.productSize}` : "");
+    (offered ? ` · 판매 사이즈 ${offered.offered}` : product.productSize ? ` · 상품 표기 ${product.productSize}` : "");
   els.sizeResult.classList.remove("hidden");
 }
 

@@ -290,11 +290,26 @@
       productSize: CTX.productSize,
     });
 
-    el('size-value').textContent = result.recommendedSize;
-    el('size-reason').textContent = window.CodiPopSize.formatSizeReason(result);
+    // 상품이 실제로 파는 사이즈에 맞춰 번역한다.
+    // 국내 몰은 프리 사이즈가 흔해서, 그대로 두면 "L을 추천합니다"처럼
+    // 그 상품에 없는 사이즈를 말하게 된다. (product-size.js 참조)
+    var offered = window.CodiPopProductSize
+      ? window.CodiPopProductSize.describeForProduct(result.recommendedSize, CTX.productSize)
+      : null;
+
+    if (offered) {
+      el('size-value').textContent = offered.badge;
+      el('size-reason').textContent = offered.headline + ' — ' + offered.detail;
+    } else {
+      el('size-value').textContent = result.recommendedSize;
+      el('size-reason').textContent = window.CodiPopSize.formatSizeReason(result);
+    }
+
     el('size-meta').textContent =
       body.heightCm + 'cm · ' + body.weightKg + 'kg · BMI ' + result.bmi +
-      (CTX.productSize ? ' · 상품 표기 ' + CTX.productSize : '');
+      (offered
+        ? ' · 판매 사이즈 ' + offered.offered
+        : CTX.productSize ? ' · 상품 표기 ' + CTX.productSize : '');
     el('size-result').classList.remove('hidden');
   }
 

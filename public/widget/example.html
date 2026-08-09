@@ -76,7 +76,7 @@
             data-codipop-price="39000"
             data-codipop-image="/demo/assets/top.jpg"
             data-codipop-category="TOP"
-            data-codipop-sizes="M"
+            data-codipop-sizes="F(55~66)"
             data-codipop-buy="/widget/example.html?bought=1"
           ></div>
         </div>
@@ -106,7 +106,12 @@
           <tr><th>data-codipop-image</th><td>상품 이미지 주소. <strong>누끼 이미지를 따로 만들 필요 없이 지금 쓰는 상품 사진 그대로</strong> 넣으면 됩니다.</td></tr>
           <tr><th>data-codipop-buy</th><td>구매 또는 장바구니 주소. 생략하면 현재 페이지로 돌아옵니다.</td></tr>
           <tr><th>data-codipop-category</th><td>TOP / BOTTOM / OUTER / DRESS. 사이즈 추천 정확도가 올라갑니다. (선택)</td></tr>
-          <tr><th>data-codipop-sizes</th><td>상품 표기 사이즈(예: M). 넣으면 "이 상품은 한 치수 크게" 같은 안내가 가능합니다. (선택)</td></tr>
+          <tr><th>data-codipop-sizes</th><td>
+            판매 사이즈. <strong>쇼핑몰에 적어두신 표기를 그대로</strong> 넣으시면 됩니다 —
+            <code>F(55~66)</code>, <code>FREE</code>, <code>S,M,L</code>, <code>55,66</code> 모두 인식합니다.<br />
+            넣으시면 <strong>그 상품에 없는 사이즈를 추천하지 않습니다.</strong> 프리 사이즈 상품이면
+            "이 고객님께는 타이트할 수 있습니다"처럼 안내합니다. (선택)
+          </td></tr>
         </table>
 
         <h2>생략하면 어떻게 되나요</h2>
