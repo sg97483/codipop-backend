@@ -70,7 +70,12 @@ node server.js        # 기본 포트 3000
 
 **필수:** `person` (이미지 1장) + 옷 이미지
 옷은 파일(`clothing`, 1~2장) 또는 **URL**(`clothingUrl`, `clothingUrl2`) 중 하나로 보냅니다.
-**선택:** `apiKey`, `clothing_count`, `heightCm`, `weightKg`, `usualSize`, `mallId`, `productId`, `productName`, `sessionId`, `userId`, `mallName`, `mallLogo`(파일)
+**선택:** `apiKey`, `clothing_count`, `heightCm`, `weightKg`, `usualSize`, `mallId`, `productId`, `productName`, `shopName`, `sessionId`, `userId`, `mallName`, `mallLogo`(파일)
+
+> **`mallId` 와 `shopName` 은 다른 축입니다.**
+> `mallId` 는 **우리 제휴 고객사(테넌트)**, `shopName` 은 **사용자가 옷을 담아온 몰**입니다.
+> B2C 앱은 `mallId` 를 보내지 않고 `shopName` 만 보냅니다 — 여기에 몰 이름을 `mallId` 로
+> 넣으면 제휴하지도 않은 몰이 고객사 통계로 잡힙니다.
 
 > `apiKey`를 보내면 **body 의 `mallId`는 무시되고 키가 가리키는 몰로 기록**됩니다.
 > 키 없이 `mallId`만 보내는 기존 경로(B2C 앱·구 데모)도 그대로 동작합니다.
@@ -132,6 +137,18 @@ GET /stats/demo-mall?days=30&minFittings=2&token=<토큰>
 응답은 사업기획서 슬라이드 21에서 요구된 5개 항목을 담습니다 —
 피팅 횟수(전체/1인당), 피팅 후 구매 전환, 최다 피팅 상품, **피팅했지만 안 산 상품**, 업셀링.
 `billing.byTier`로 등급별 건수·원가가 분리되어 청구서 근거가 됩니다.
+
+### 앱 사용자가 어느 몰 상품을 입어보는가 (`topShops`)
+
+```
+GET /stats/app?days=30&token=<STATS_TOKEN>
+```
+
+응답의 `topShops` 는 **B2C 앱에서 피팅된 상품의 출처 쇼핑몰 순위**입니다.
+앱 사용자가 이미 그 몰 옷을 입어보고 있다는 뜻이므로, **그대로 영업 후보 리스트**가 됩니다.
+제휴를 제안할 때 "귀사 상품이 저희 앱에서 월 ○○회 피팅됩니다"라고 말할 수 있습니다.
+
+`mallId='app'` 에서만 채워집니다 (위젯 요청은 `shopName` 을 보내지 않습니다).
 
 > **`fittedButNotBought`는 절대 건수가 아니라 미구매율로 정렬됩니다.**
 > 절대 건수로 정렬하면 인기 상품이 상위를 차지해, 잘 팔리는 상품이 "안 팔리는 상품"으로 보입니다.

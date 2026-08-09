@@ -116,6 +116,10 @@ function logFittingEvent(payload) {
     // 상품명. 리포트에 `top-01` 대신 사람이 읽는 이름이 나오게 하려면 이 값이 필요하다.
     // 위젯이 몰 페이지에서 직접 읽어 보내주므로 상품 API 연동이 없어도 채워진다.
     productName: safeStr(payload.body?.productName, 120),
+    // 앱에서 온 피팅이 "어느 쇼핑몰 상품이었는지". mallId 와 다른 축이다 —
+    // mallId 는 우리 고객사(테넌트)이고, shopName 은 사용자가 옷을 담아온 몰이다.
+    // 여기에 mallId 를 쓰면 제휴하지도 않은 몰이 고객사 통계로 잡힌다.
+    shopName: safeStr(payload.body?.shopName, 60),
     sessionId: safeStr(payload.body?.sessionId, 80),
     userId: safeStr(payload.body?.userId, 80),
 
@@ -288,6 +292,14 @@ async function getMallStats(mallId, days = 30, minFittings = 2) {
     .sort((a, b) => b.missRate - a.missRate || b.missed - a.missed)
     .slice(0, 10);
 
+  // 앱 사용자가 어느 쇼핑몰 상품을 많이 입어봤는가.
+  // **이게 곧 다음 영업 리스트다** — 우리 앱에서 이미 수요가 확인된 몰이기 때문.
+  const shopCount = new Map();
+  for (const f of success) {
+    if (!f.shopName) continue;
+    shopCount.set(f.shopName, (shopCount.get(f.shopName) || 0) + 1);
+  }
+
   // 업셀링 — 한 번에 2개 이상 착장한 경우를 조합으로 집계
   const comboCount = new Map();
   for (const f of success) {
@@ -338,6 +350,9 @@ async function getMallStats(mallId, days = 30, minFittings = 2) {
     })),
     fittedButNotBought: fittedNotBought,
     fittedButNotBoughtMinFittings: minFittings,
+
+    // 앱(mallId='app')에서만 채워진다. 제휴 후보 발굴용.
+    topShops: topN(shopCount).map(([shopName, count]) => ({ shopName, count })),
 
     // ⑤ 업셀링 (2개 이상 동시 착장)
     upsell: {
