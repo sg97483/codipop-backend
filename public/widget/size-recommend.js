@@ -11,10 +11,12 @@
 const CLOTHING_SIZE_LABELS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXL+'];
 
 const SIZE_REASONS = {
-  sizeReasonUsual: '평소 {usualSize} 기준으로 {recommendedSize}를 추천해요.',
-  sizeReasonSlim: '체형이 슬림한 편이라 평소보다 한 단계 작은 {recommendedSize}를 추천해요.',
-  sizeReasonBorder: '평소 {usualSize}를 유지하되, 브랜드 핏에 따라 한 사이즈 여유를 고려해 보세요.',
-  sizeReasonBroad: '체형 기준으로 평소보다 여유 있는 {recommendedSize}를 추천해요.',
+  sizeReasonBodyOnly: '키·몸무게 기준(BMI {bmi})으로 {recommendedSize}를 추천해요.',
+  sizeReasonBodyMatch: '평소 사이즈와 체형 기준이 같아요. {recommendedSize}를 추천해요.',
+  sizeReasonBodySmaller:
+    '체형 기준으로는 {recommendedSize}예요. 평소 {usualSize}를 입으신다면 여유 있는 핏을 좋아하시는 편이에요.',
+  sizeReasonBodyLarger:
+    '체형 기준으로는 {recommendedSize}예요. 평소 {usualSize}를 입으신다면 붙는 핏을 좋아하시는 편이에요.',
   sizeReasonOuter: '아우터는 겹쳐 입는 경우가 많아 {recommendedSize}를 추천해요.',
   sizeReasonProductMatch: '상품 표기 {productSize}와 내 추천 {recommendedSize}가 잘 맞아요.',
   sizeReasonProductSmall: '상품 표기 {productSize}보다 여유 있는 {recommendedSize}를 권장해요.',
@@ -54,36 +56,76 @@ function isValidBodySize(profile) {
   );
 }
 
-/** 평소 사이즈를 기준으로 BMI 에 따라 ±1 보정한다. */
+/** BMI 구간 → 사이즈. 국내 여성복 호수(44·55·66·77·88)에 대응한다. */
+const BMI_SIZE_BANDS = [
+  { max: 17.5, size: 'XS' },   // 44
+  { max: 19.5, size: 'S' },    // 55
+  { max: 22.0, size: 'M' },    // 66
+  { max: 24.5, size: 'L' },    // 77
+  { max: 27.0, size: 'XL' },   // 88
+  { max: 30.0, size: 'XXL' },  // 99
+  { max: Infinity, size: 'XXL+' },
+];
+
+function sizeFromBmi(bmi) {
+  for (const band of BMI_SIZE_BANDS) {
+    if (bmi < band.max) return band.size;
+  }
+  return 'XXL+';
+}
+
+/** 구간 경계에 가까우면 확신을 낮춘다 — 경계에서는 브랜드 핏에 따라 갈린다. */
+function confidenceFromBmi(bmi) {
+  if (bmi <= 0) return 'low';
+  for (const band of BMI_SIZE_BANDS) {
+    if (bmi < band.max) return band.max - bmi < 0.6 ? 'medium' : 'high';
+  }
+  return 'medium';
+}
+
+/**
+ * 체형(키·몸무게)으로 사이즈를 정한다. **같은 체형이면 항상 같은 사이즈가 나온다.**
+ *
+ * 예전에는 "평소 사이즈 ± BMI 보정" 이라, 165cm·50kg 인 같은 사람이 평소 M 을 고르면 S,
+ * 평소 S 를 고르면 XS 가 나왔다. 화면은 "체형에 맞는 사이즈를 찾아 드릴게요"라고
+ * 약속하는데 실제로는 평소 사이즈가 기준점이었던 것이다.
+ *
+ * 평소 사이즈는 이제 **핏 취향**을 읽는 데만 쓰고 추천 사이즈를 바꾸지 않는다.
+ *
+ * 앱(`src/services/sizeRecommendService.ts`)과 **같은 답을 내야 한다. 한쪽만 고치지 말 것.**
+ */
 function recommendClothingSize(input) {
   const bmi = calcBmi(input.heightCm, input.weightKg);
-  const base = sizeIndex(input.usualSize);
-  let offset = 0;
-  let fitHint = 'similar';
-  let reasonKey = 'sizeReasonUsual';
-  let confidence = 'medium';
-
-  if (bmi > 0 && bmi < 18.5) {
-    offset = -1; fitHint = 'smaller'; reasonKey = 'sizeReasonSlim'; confidence = 'medium';
-  } else if (bmi >= 18.5 && bmi < 23) {
-    offset = 0; fitHint = 'similar'; reasonKey = 'sizeReasonUsual'; confidence = 'high';
-  } else if (bmi >= 23 && bmi < 25) {
-    offset = 0; fitHint = 'similar'; reasonKey = 'sizeReasonBorder'; confidence = 'medium';
-  } else if (bmi >= 25) {
-    offset = 1; fitHint = 'larger'; reasonKey = 'sizeReasonBroad'; confidence = 'medium';
-  } else {
-    confidence = 'low'; reasonKey = 'sizeReasonUsual';
-  }
-
-  // 카테고리 약한 보정: OUTER 는 여유 핏 선호
-  const category = (input.category || '').toUpperCase();
-  if (category === 'OUTER' && offset < 1 && bmi >= 23) {
-    offset = 1; fitHint = 'larger'; reasonKey = 'sizeReasonOuter';
-  }
-
-  const recommendedSize = clampSize(base + offset);
-  const productSize = normalizeSizeLabel(input.productSize);
   const roundedBmi = Math.round(bmi * 10) / 10;
+
+  let recommendedSize = sizeFromBmi(bmi);
+  const confidence = confidenceFromBmi(bmi);
+
+  // 카테고리 보정 — 옷의 성질이지 사람의 성질이 아니므로 체형 일관성을 깨지 않는다.
+  const category = (input.category || '').toUpperCase();
+  const isOuter = category === 'OUTER';
+  if (isOuter) recommendedSize = clampSize(sizeIndex(recommendedSize) + 1);
+
+  const usualSize = input.usualSize;
+  const diffFromUsual = usualSize ? sizeIndex(recommendedSize) - sizeIndex(usualSize) : 0;
+
+  let reasonKey;
+  let fitHint = 'similar';
+  if (isOuter) {
+    reasonKey = 'sizeReasonOuter';
+  } else if (!usualSize) {
+    reasonKey = 'sizeReasonBodyOnly';
+  } else if (diffFromUsual === 0) {
+    reasonKey = 'sizeReasonBodyMatch';
+  } else if (diffFromUsual < 0) {
+    reasonKey = 'sizeReasonBodySmaller';
+    fitHint = 'smaller';
+  } else {
+    reasonKey = 'sizeReasonBodyLarger';
+    fitHint = 'larger';
+  }
+
+  const productSize = normalizeSizeLabel(input.productSize);
 
   if (productSize) {
     const diff = sizeIndex(recommendedSize) - sizeIndex(productSize);
@@ -101,7 +143,7 @@ function recommendClothingSize(input) {
 
   return {
     recommendedSize, confidence, reasonKey,
-    reasonParams: { usualSize: input.usualSize, recommendedSize },
+    reasonParams: { usualSize: usualSize || '', recommendedSize, bmi: roundedBmi },
     bmi: roundedBmi, fitHint,
   };
 }

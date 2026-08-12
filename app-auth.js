@@ -16,7 +16,8 @@
 const { firestore, auth } = require('./firebase-admin.js');
 
 // 앱의 TICKET_COST_FITTING 과 같아야 합니다. 앱만 바꾸면 서버가 더 깎거나 덜 깎습니다.
-const TICKET_COST_FITTING = Number(process.env.TICKET_COST_FITTING) || 10;
+// **티켓 1장 = 피팅 1회** (2026-08-12 기획 요청으로 10장 → 1장).
+const TICKET_COST_FITTING = Number(process.env.TICKET_COST_FITTING) || 1;
 
 /** 개발용 무제한 계정. 앱의 isDevBypassUser() 와 짝입니다. */
 const DEV_BYPASS_EMAILS = String(process.env.DEV_BYPASS_EMAILS || '')
@@ -53,6 +54,10 @@ function ticketDocRef(uid) {
 /** 차감 없이 잔액만 확인합니다. **Gemini 를 부르기 전에** 씁니다. */
 async function checkTickets(user) {
   if (user.devBypass) return { ok: true, balance: 9999, bypass: true };
+
+  // 구 단위(1회=10장) 잔액이 아직 환산되지 않은 사용자가 있을 수 있습니다.
+  // 앱이 처음 실행될 때 환산하므로, 서버는 잔액을 그대로 믿되 부족 판정만 합니다.
+  // 환산 전 잔액은 실제보다 크므로 사용자에게 불리하지 않습니다.
 
   try {
     const snap = await ticketDocRef(user.uid).get();
