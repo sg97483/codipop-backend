@@ -291,9 +291,16 @@ async function load(event) {
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
+      // 토큰을 넣은 적이 없는데 401 이면 "틀렸다"가 아니라 "필요하다"이다.
+      // 첫 방문자에게 빨간 오류를 보여줄 이유가 없다.
+      const hadToken = Boolean(token);
       writeToken("", false);
       showSignedIn(false);
-      throw new Error("조회 토큰이 올바르지 않습니다. 다시 입력해 주세요.");
+      throw new Error(
+        hadToken
+          ? "조회 토큰이 올바르지 않습니다. 다시 입력해 주세요."
+          : "조회 토큰을 입력해 주세요.",
+      );
     }
     if (!res.ok || !data.success) {
       throw new Error(data.message || `조회 실패 (${res.status})`);
@@ -338,7 +345,10 @@ const q = new URLSearchParams(location.search);
 const MASTER_MALL = q.get("mall") || "";
 if (q.get("days")) els.days.value = q.get("days");
 
-// 이미 토큰이 있으면 바로 연다. 토큰이 아예 설정되지 않은 과도기에도
-// (서버가 open 모드로 응답) 화면이 비어 보이지 않도록 한 번 시도한다.
+// 일단 열어 본다.
+//
+// 서버가 인증을 요구하지 않는 상태(파일럿 전 데모 기간)면 그대로 리포트가 뜨고,
+// 요구하는 상태면 401 이 오면서 토큰 입력 화면으로 넘어간다.
+// **인증이 필요 없는데도 로그인 화면을 먼저 보여주는 것은 불필요한 마찰이다.**
 showSignedIn(Boolean(readToken()));
-if (readToken() || MASTER_MALL) load();
+load();
