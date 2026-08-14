@@ -189,6 +189,67 @@ app.get('/', (req, res) => {
 });
 
 // AdMob app-ads.txt 인증용 (Play Console/App Store 개발자 웹사이트 루트에서 크롤링)
+// --- 초대 링크 ---
+//
+// 공유 이미지의 QR 이 여기를 가리킵니다. QR 은 주소를 하나만 담을 수 있는데
+// 받는 사람이 아이폰인지 안드로이드인지는 보내는 사람도 모르므로,
+// **서버가 기기를 보고 알맞은 스토어로 보냅니다.**
+//
+// 이전에는 QR 이 `codipop.app` 을 가리켰는데 그 도메인은 존재하지 않았습니다.
+// 스캔해도 아무 데도 가지 못했고, 바이럴 워터마크가 아무 일도 하지 않고 있었습니다.
+const STORE_URLS = {
+  ios: 'https://apps.apple.com/kr/app/id6755323442',
+  android: 'https://play.google.com/store/apps/details?id=com.mk.codipop',
+};
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+app.get('/invite', (req, res) => {
+  const code = String(req.query.code || '').trim().slice(0, 20);
+  const ua = String(req.headers['user-agent'] || '');
+
+  // 초대 코드는 앱에서 직접 입력해야 하므로, 스토어로 보내기 전에 화면으로 한 번 보여 준다.
+  // 바로 넘겨버리면 코드를 못 보고 설치만 하게 된다.
+  const isIos = /iPhone|iPad|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const primary = isIos ? STORE_URLS.ios : isAndroid ? STORE_URLS.android : '';
+
+  res.type('html').send(`<!DOCTYPE html>
+<html lang="ko"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>코디팝 초대</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:#faf8fd;color:#16121c;padding:24px;
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+  .card{width:100%;max-width:380px;background:#fff;border-radius:18px;padding:28px 24px;
+    box-shadow:0 10px 40px rgba(80,40,120,.10);text-align:center}
+  h1{margin:0 0 6px;font-size:20px;letter-spacing:-.02em}
+  p{margin:0;color:#6b6377;font-size:14px}
+  .code{margin:20px 0;padding:14px;border:1px dashed #d3c6e6;border-radius:12px;background:#faf7ff}
+  .code span{display:block;font-size:12px;color:#8a7fa0;margin-bottom:4px}
+  .code b{font-size:24px;letter-spacing:.14em;color:#6A0DAD}
+  a.btn{display:block;margin-top:10px;padding:14px;border-radius:12px;text-decoration:none;font-weight:700}
+  .primary{background:#6A0DAD;color:#fff}
+  .secondary{background:#f2eef8;color:#4a2a70}
+  .hint{margin-top:18px;font-size:12.5px;color:#8a8494}
+</style></head>
+<body><div class="card">
+  <h1>코디팝 초대장</h1>
+  <p>AI 로 옷을 입어보는 앱이에요</p>
+  ${code ? `<div class="code"><span>초대 코드</span><b>${escapeHtml(code)}</b></div>` : ''}
+  ${primary ? `<a class="btn primary" href="${primary}">앱 받으러 가기</a>` : ''}
+  <a class="btn ${primary ? 'secondary' : 'primary'}" href="${STORE_URLS.ios}">아이폰</a>
+  <a class="btn secondary" href="${STORE_URLS.android}">안드로이드</a>
+  ${code ? '<p class="hint">앱 설치 후 가입할 때 위 초대 코드를 입력하시면 무료 피팅 티켓을 드려요.</p>' : ''}
+</div></body></html>`);
+});
+
 app.get('/app-ads.txt', (req, res) => {
   res.type('text/plain');
   res.send('google.com, pub-6990308526694074, DIRECT, f08c47fec0942fa0\n');
