@@ -52,6 +52,7 @@ function sendEvent(type, extra = {}) {
 }
 
 const PRODUCTS = [
+  // ── TOPS ────────────────────────────────────────────────
   {
     id: "top-01",
     badge: "NEW",
@@ -65,9 +66,43 @@ const PRODUCTS = [
     desc: "[여름 신상] 슬럽 조직감이 살아있는 데일리 블라우스. 비침 없는 두께감으로 이너 부담이 없어요.",
     category: "TOPS",
     productSize: "F(55~66)", // 국내 몰에서 가장 흔한 표기 (프리 사이즈)
-    image: "./assets/top.jpg",
+    image: "./assets/top-01.jpg",
     buyUrl: null,
   },
+  {
+    id: "top-02",
+    badge: "BEST",
+    tags: ["BEST", "재입고"],
+    title: "스퀘어넥 리브 니트 탑",
+    price: 24900,
+    listPrice: 32000,
+    salePrice: 28900,
+    reviewCount: 212,
+    colors: ["#1f1f22", "#ece7de", "#9fb0c4"],
+    desc: "몸에 부담 없이 붙는 리브 조직. 목선이 예쁘게 떨어져 이너로도 단독으로도 좋아요.",
+    category: "TOPS",
+    productSize: "F(44~66)",
+    image: "./assets/top-02.jpg",
+    buyUrl: null,
+  },
+  {
+    id: "top-04",
+    badge: "MADE",
+    tags: ["MADE", "무료배송"],
+    title: "코튼 크롭 셔츠",
+    price: 29800,
+    listPrice: 39800,
+    salePrice: 34800,
+    reviewCount: 41,
+    colors: ["#f5f3ee", "#b9c7d6", "#3b4a3f"],
+    desc: "기장을 짧게 잡아 하이웨스트 하의와 잘 맞습니다. 자체 제작 코튼 100%.",
+    category: "TOPS",
+    productSize: "F",
+    image: "./assets/top-04.jpg",
+    buyUrl: null,
+  },
+
+  // ── BOTTOMS ─────────────────────────────────────────────
   {
     id: "bottom-01",
     badge: "BEST",
@@ -81,9 +116,11 @@ const PRODUCTS = [
     desc: "뒷밴딩으로 편안한 착용감. 한여름에도 시원하게 입을 수 있는 라이트 소재입니다.",
     category: "BOTTOMS",
     productSize: "S,M,L",
-    image: "./assets/bottom.jpg",
+    image: "./assets/bottom-01.jpg",
     buyUrl: null,
   },
+
+  // ── OUTER ───────────────────────────────────────────────
   {
     id: "outer-01",
     badge: "MADE",
@@ -97,10 +134,32 @@ const PRODUCTS = [
     desc: "여름 끝자락부터 간절기까지 활용도 만점. 가볍게 흐르는 소재와 여유로운 핏입니다.",
     category: "OUTER",
     productSize: "FREE",
-    image: "./assets/outer.jpg",
+    image: "./assets/outer-01.jpg",
     buyUrl: null,
   },
 ];
+
+/**
+ * 상품 사진이 아직 없을 때.
+ *
+ * 상품을 늘릴 때 사진이 한 박자 늦게 오는 일이 반복됩니다. 파일이 없으면
+ * 브라우저 기본 '깨진 이미지' 아이콘이 뜨는데, 그게 **시연 중에 가장 눈에 띕니다.**
+ * 회색 자리로 대신 채워 두면 최소한 레이아웃은 멀쩡해 보입니다.
+ *
+ * 사진이 모두 있으면 이 함수는 한 번도 불리지 않습니다 — 지금이 그 상태입니다.
+ */
+function markMissingImage(img) {
+  // display:none 이 아니라 visibility:hidden 입니다.
+  // 감추면 img 가 차지하던 3/4 비율 칸이 사라져 부모 높이가 0 이 되고,
+  // inset:0 으로 깔아 둔 회색 자리도 같이 0 이 됩니다.
+  img.style.visibility = "hidden";
+  const box = img.parentElement;
+  if (!box || box.querySelector(".img-missing")) return;
+  const ph = document.createElement("div");
+  ph.className = "img-missing";
+  ph.textContent = "상품 이미지 준비 중";
+  box.appendChild(ph);
+}
 
 /** 할인율 — 소비자가 대비 최종가. 국내 몰이 카드에 항상 붙이는 숫자다. */
 function discountRate(product) {
@@ -123,7 +182,19 @@ const MIX_MATCH_RULES = {
 function getMixMatches(product) {
   const wanted = MIX_MATCH_RULES[product.category] || [];
   return wanted
-    .map((cat) => PRODUCTS.find((p) => p.category === cat && p.id !== product.id))
+    .map((cat) => {
+      // 카테고리별 후보 중 하나를 고른다.
+      //
+      // 상품이 3개일 때는 카테고리마다 하나뿐이라 find 로 충분했지만,
+      // 10개가 되면 **어떤 상품을 보든 늘 같은 조합만** 뜹니다.
+      // 시연 중 상품을 옮겨 다닐 때 추천이 그대로면 고정 문구인 게 티가 납니다.
+      // 상품 id 로 흩어 두면 조합이 달라 보이면서도, 같은 상품은 늘 같은 짝이라
+      // 새로고침마다 바뀌는 어수선함은 없습니다.
+      const pool = PRODUCTS.filter((p) => p.category === cat && p.id !== product.id);
+      if (pool.length === 0) return null;
+      const seed = product.id.split("").reduce((n, c) => n + c.charCodeAt(0), 0);
+      return pool[seed % pool.length];
+    })
     .filter(Boolean);
 }
 
@@ -242,7 +313,7 @@ function renderHome() {
     return `
     <button type="button" class="product-card" data-product-id="${p.id}">
       <span class="card-media">
-        <img src="${p.image}" alt="${p.title}" loading="lazy" />
+        <img src="${p.image}" alt="${p.title}" loading="lazy" onerror="markMissingImage(this)" />
         <span class="card-heart" aria-hidden="true">♡</span>
       </span>
       <span class="card-body">
@@ -523,7 +594,7 @@ function renderMixMatch(product) {
     .map(
       (p) => `
     <div class="mix-card">
-      <img src="${p.image}" alt="${p.title}" />
+      <img src="${p.image}" alt="${p.title}" onerror="markMissingImage(this)" />
       <p class="mix-title">${p.title}</p>
       <p class="mix-price">${won(p.price)}</p>
       <button type="button" class="btn-secondary mix-btn" data-mix-id="${p.id}">

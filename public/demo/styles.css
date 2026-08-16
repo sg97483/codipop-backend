@@ -729,6 +729,9 @@ body {
 }
 
 .mix-card {
+  /* markMissingImage() 가 넣는 회색 자리(inset:0)의 기준이 됩니다.
+     없으면 카드가 아니라 페이지 전체를 덮습니다. */
+  position: relative;
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 8px;
@@ -824,4 +827,17 @@ body {
     overflow: hidden;
     min-height: calc(100vh - 48px);
   }
+}
+
+/* 상품 사진이 아직 없는 칸. markMissingImage() 가 만들어 넣습니다. */
+.img-missing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f1f4;
+  color: #9a9aa4;
+  font-size: 12px;
+  font-weight: 600;
 }
