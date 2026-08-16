@@ -391,14 +391,25 @@
           'pointer-events:auto',
           'padding:11px 20px',
           'border-radius:999px',
-          'background:rgba(24,25,28,.82)',
-          '-webkit-backdrop-filter:blur(6px)',
-          'backdrop-filter:blur(6px)',
-          'font:600 14px/1.2 inherit',
+          // 어두운 알약은 밝은 스튜디오 사진 위에서 **덩어리로 얹힌 이물질**처럼 보였고,
+          // 흰 글씨도 blur 때문에 탁해졌습니다. 밝은 프로스트 글래스로 뒤집으면
+          // 글자가 검정이라 사진이 어떻든 또렷하고, 사진 안에 놓인 것처럼 읽힙니다.
+          'background:rgba(255,255,255,.82)',
+          '-webkit-backdrop-filter:blur(12px) saturate(150%)',
+          'backdrop-filter:blur(12px) saturate(150%)',
+          'color:#17181c',
+          'font:700 14px/1.2 inherit',
           'white-space:nowrap',
-          'box-shadow:0 4px 14px rgba(0,0,0,.28)',
+          // 안쪽 흰 테두리가 유리의 가장자리를 만듭니다. 없으면 그냥 흰 판입니다.
+          'box-shadow:0 6px 20px rgba(0,0,0,.16),inset 0 0 0 1px rgba(255,255,255,.65)',
         ])
         .join(';');
+
+      // 글자가 검정이 되었으므로 currentColor 를 따르던 반짝임도 검정이 됩니다.
+      // 여기만 보라로 남겨 'AI 가 해 주는 것'이라는 신호를 지킵니다.
+      if (btn.firstChild && btn.firstChild.setAttribute) {
+        btn.firstChild.setAttribute('fill', '#7C3AED');
+      }
     } else {
       btn.style.cssText = base
         .concat([
