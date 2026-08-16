@@ -319,24 +319,72 @@
   }
 
   // --- 저장 / 공유 ---
+
+  /** 손가락으로 쓰는 기기인지. 저장 경로를 고르는 데만 쓴다. */
+  function isTouchDevice() {
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  }
+
+  /**
+   * 결과 이미지 저장.
+   *
+   * 예전에는 a[download] 하나만 썼는데 **모바일에서 아무 일도 일어나지 않았습니다.**
+   * 이 화면은 몰 페이지 안의 **교차 출처 iframe** 이고, 안드로이드 크롬은 그 안에서
+   * 시작된 a[download] 다운로드를 조용히 무시합니다. 예외를 던지지 않으므로
+   * catch 에 넣어 둔 대비책(새 탭 열기)까지 같이 죽어, 버튼이 완전히 먹통이 됐습니다.
+   *
+   * **a.click() 이 막혔는지는 코드로 알아낼 방법이 없습니다.** 그래서 실패를 감지해
+   * 되돌리는 대신, 기기별로 되는 경로를 **처음부터 골라** 부릅니다.
+   *
+   *   모바일 → 공유 시트 (안드로이드·iOS 모두 시트 안에 '이미지 저장'이 있다)
+   *   데스크톱 → a[download]
+   *
+   * 공유 시트는 iframe 에 allow="web-share" 가 있어야 열립니다 — codipop.js 에서
+   * 이미 붙여 두었으니 지우지 마세요.
+   */
   async function saveImage() {
     if (!state.resultUrl) return;
     sendEvent('save_image', { fittingEventId: state.fittingEventId });
+
+    var name = 'codipop-' + (CTX.productId || 'fitting') + '.jpg';
+    var blob;
     try {
       var res = await fetch(state.resultUrl);
-      var blob = await res.blob();
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = 'codipop-' + (CTX.productId || 'fitting') + '.jpg';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      blob = await res.blob();
     } catch (e) {
-      // 다운로드가 막히면 새 탭으로라도 열어 준다 (모바일 사파리 등)
+      // 이미지를 못 가져오면 저장할 것 자체가 없다. 원본이라도 띄운다.
       window.open(state.resultUrl, '_blank', 'noopener');
+      return;
     }
+
+    // 1) 공유 시트에 파일을 실어 보낸다.
+    try {
+      var file = new File([blob], name, { type: blob.type || 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: CTX.productName || 'CodiPOP 피팅' });
+        return;
+      }
+    } catch (e) {
+      // 사용자가 시트를 닫은 것도 여기로 온다. 그때 다른 창을 또 띄우면 성가시다.
+      if (e && e.name === 'AbortError') return;
+    }
+
+    // 2) 공유 시트를 못 쓰는 모바일 — 새 탭으로 띄우면 길게 눌러 저장할 수 있다.
+    //    여기서 a[download] 를 시도하면 아무 일도 없이 끝난다.
+    if (isTouchDevice()) {
+      window.open(state.resultUrl, '_blank', 'noopener');
+      return;
+    }
+
+    // 3) 데스크톱 — 정식 다운로드
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
   async function shareResult() {
