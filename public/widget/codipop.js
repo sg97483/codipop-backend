@@ -304,27 +304,95 @@
 
   // --- 버튼 삽입 ---
 
+  /** 버튼 왼쪽의 반짝임. 그냥 링크가 아니라 AI 가 뭔가 해 준다는 신호다. */
+  var SPARKLE_SVG =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" ' +
+    'style="flex:none">' +
+    '<path d="M12 2l1.9 5.6L19.5 9.5 13.9 11.4 12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2z"/>' +
+    '<path d="M18.5 14l.8 2.3 2.2.8-2.2.8-.8 2.3-.8-2.3-2.2-.8 2.2-.8.8-2.3z" opacity=".7"/>' +
+    '</svg>';
+
+  /**
+   * overlay 버튼이 사진 위에 앉으려면 기준이 될 부모가 필요하다.
+   *
+   * 슬롯이 position:static 이면 absolute 버튼이 **페이지 전체**를 기준으로 잡혀
+   * 엉뚱한 곳에 뜬다. 몰에게 CSS 를 고치라 하지 않고 여기서 세운다 —
+   * 이 위젯의 약속은 "스크립트 한 줄"이지 "CSS 도 좀 만져 주세요"가 아니다.
+   */
+  function positionHost(host) {
+    if (!host) return;
+    var pos = '';
+    try {
+      pos = window.getComputedStyle(host).position;
+    } catch (e) {
+      /* 계산 실패 시엔 아래에서 그냥 세운다 */
+    }
+    if (!pos || pos === 'static') host.style.position = 'relative';
+  }
+
+  /**
+   * 버튼을 만든다. 모양은 슬롯의 `data-codipop-style` 이 정한다.
+   *
+   *   (기본)    구매 버튼들 사이에 끼는 가로 꽉 찬 버튼
+   *   overlay   **상품 사진 위에 떠 있는 알약**
+   *
+   * overlay 를 따로 둔 이유: 구매 버튼 근처는 이미 장바구니·바로구매·관심상품으로
+   * 붐빈다. 거기 하나 더 붙이면 **버튼 목록의 네 번째**가 되어 묻힌다.
+   * 사진 위에 얹으면 상품을 보는 시선 안에 들어오고, 무엇을 입어보는지도 분명해진다.
+   */
   function makeButton(host) {
+    var isOverlay = !!host && host.getAttribute('data-codipop-style') === 'overlay';
+
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'codipop-button';
-    btn.textContent = BUTTON_TEXT;
-    btn.style.cssText = [
+    btn.className = 'codipop-button' + (isOverlay ? ' codipop-button--overlay' : '');
+    btn.innerHTML = SPARKLE_SVG + '<span></span>';
+    btn.lastChild.textContent = BUTTON_TEXT;
+
+    var base = [
       'display:inline-flex',
       'align-items:center',
       'justify-content:center',
       'gap:6px',
-      'width:100%',
-      'padding:14px 18px',
-      'margin:8px 0',
       'border:0',
-      'border-radius:10px',
-      'background:#111318',
       'color:#fff',
-      'font:600 15px/1.2 inherit',
       'cursor:pointer',
       '-webkit-appearance:none',
-    ].join(';');
+    ];
+
+    if (isOverlay) {
+      // 사진 위에 얹으므로 **사진을 최대한 덜 가려야** 한다 — 가로로 채우지 않고
+      // 글자만큼만, 아래쪽 가운데에. 반투명 + blur 로 뒤가 비쳐야 '얹혀 있다'로 읽힌다.
+      positionHost(host);
+      btn.style.cssText = base
+        .concat([
+          'position:absolute',
+          'left:50%',
+          'bottom:16px',
+          'transform:translateX(-50%)',
+          'z-index:5',
+          'padding:11px 20px',
+          'border-radius:999px',
+          'background:rgba(24,25,28,.82)',
+          '-webkit-backdrop-filter:blur(6px)',
+          'backdrop-filter:blur(6px)',
+          'font:600 14px/1.2 inherit',
+          'white-space:nowrap',
+          'box-shadow:0 4px 14px rgba(0,0,0,.28)',
+        ])
+        .join(';');
+    } else {
+      btn.style.cssText = base
+        .concat([
+          'width:100%',
+          'padding:14px 18px',
+          'margin:8px 0',
+          'border-radius:10px',
+          'background:#111318',
+          'font:600 15px/1.2 inherit',
+        ])
+        .join(';');
+    }
 
     btn.addEventListener('click', function (e) {
       e.preventDefault();
