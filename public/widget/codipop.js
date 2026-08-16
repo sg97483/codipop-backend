@@ -363,14 +363,32 @@
     if (isOverlay) {
       // 사진 위에 얹으므로 **사진을 최대한 덜 가려야** 한다 — 가로로 채우지 않고
       // 글자만큼만, 아래쪽 가운데에. 반투명 + blur 로 뒤가 비쳐야 '얹혀 있다'로 읽힌다.
-      positionHost(host);
+      //
+      // 기준은 **슬롯이 아니라 슬롯의 부모**다. 몰이 넣는 슬롯 div 는 대개 빈 칸이라
+      // 높이가 0 이고, 거기에 bottom:16px 을 걸면 사진 위가 아니라 **사진 아래
+      // 가장자리**에 걸립니다. 부모(사진을 감싼 칸)를 기준으로 세우고 슬롯 자신을
+      // 그 칸 전체로 펼쳐야 '사진 위'가 됩니다.
+      //
+      // 펼친 슬롯이 사진 링크를 덮어 클릭을 가로채므로 pointer-events 를 꺼 두고,
+      // 버튼에서만 다시 켭니다. 확대보기 클릭이 죽으면 안 됩니다.
+      positionHost(host.parentElement || host);
+      host.style.cssText = [
+        'position:absolute',
+        'left:0',
+        'right:0',
+        'top:0',
+        'bottom:0',
+        'pointer-events:none',
+        'z-index:5',
+      ].join(';');
+
       btn.style.cssText = base
         .concat([
           'position:absolute',
           'left:50%',
           'bottom:16px',
           'transform:translateX(-50%)',
-          'z-index:5',
+          'pointer-events:auto',
           'padding:11px 20px',
           'border-radius:999px',
           'background:rgba(24,25,28,.82)',
