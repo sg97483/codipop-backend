@@ -241,6 +241,43 @@
     document.body.appendChild(overlay);
   }
 
+  /**
+   * 세션 토큰 확보.
+   *
+   * **이 요청은 몰 페이지에서 나갑니다.** 그래서 브라우저가 붙이는 Origin 이
+   * 진짜 몰 주소이고, 서버가 그걸로 허용 도메인을 검사합니다.
+   * iframe 안에서는 이 검사를 할 수 없습니다 — 거기서 나가는 요청의 Origin 은
+   * 코디팝 서버 주소라서 어느 몰인지 알려 주지 못합니다.
+   *
+   * 실패해도 위젯은 계속 동작합니다. 배포 직후에는 토큰 없는 옛 위젯이
+   * 캐시에 남아 돌아다니므로, 서버가 당분간 두 경로를 모두 받습니다.
+   */
+  var sessionToken = '';
+  var sessionPromise = null;
+
+  function ensureSession() {
+    if (sessionToken) return Promise.resolve(sessionToken);
+    if (!sessionPromise) {
+      sessionPromise = fetch(API_ORIGIN + '/widget/session?key=' + encodeURIComponent(KEY), {
+        method: 'POST',
+      })
+        .then(function (r) {
+          return r.ok ? r.json() : null;
+        })
+        .then(function (d) {
+          sessionToken = (d && d.token) || '';
+          if (!sessionToken) {
+            console.warn('[CodiPOP] 세션 발급 실패 — 이 도메인이 등록되어 있는지 확인하세요.');
+          }
+          return sessionToken;
+        })
+        .catch(function () {
+          return '';
+        });
+    }
+    return sessionPromise;
+  }
+
   function open(product) {
     if (!overlay) buildOverlay();
 
@@ -256,7 +293,12 @@
       origin: location.origin,
     });
 
-    frame.src = API_ORIGIN + '/widget/fitting.html?' + params.toString();
+    // 토큰을 받은 뒤에 iframe 을 연다. 대개 버튼을 누르기 전에 이미 받아 두었으므로
+    // 체감 지연은 없다(마운트 시점에 미리 부른다).
+    ensureSession().then(function (token) {
+      if (token) params.set('st', token);
+      frame.src = API_ORIGIN + '/widget/fitting.html?' + params.toString();
+    });
     overlay.style.display = 'flex';
     // 스크롤 잠금 — 오버레이 뒤에서 몰 페이지가 움직이면 조작이 어긋난다
     lastBodyOverflow = document.body.style.overflow;
@@ -539,6 +581,9 @@
     key: KEY,
     apiOrigin: API_ORIGIN,
   };
+
+  // 버튼을 누르기 전에 미리 받아 둔다. 그래야 누른 순간 바로 열린다.
+  ensureSession();
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mountWithRetry);

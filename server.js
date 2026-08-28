@@ -16,8 +16,10 @@ const {
   getTenant,
   getTenantByApiKey,
   getTenantByDashboardToken,
+  isOriginAllowed,
   describeTenantConfig,
 } = require('./tenants.js');
+const { issueSession, verifySession, describeSessionConfig } = require('./widget-session.js');
 const { applyBrandWatermark } = require('./watermark.js');
 const { fetchRemoteImage } = require('./remote-image.js');
 const { fetchProductMeta } = require('./remote-page.js');
@@ -180,6 +182,7 @@ app.get('/', (req, res) => {
       tenantsWithDashboardToken: tenants.withDashboardToken,
       // 설정 여부만 (값은 절대 노출하지 않는다)
       statsTokenSet: Boolean(process.env.STATS_TOKEN),
+      widgetSession: describeSessionConfig(),
       geminiKeySet: Boolean(process.env.GEMINI_API_KEY),
       quotaIpHourlyLimit: quota.ipHourlyLimit,
       quotaHardCapMultiplier: quota.hardCapMultiplier,
@@ -300,6 +303,34 @@ app.get('/widget/product-meta', async (req, res) => {
   }
 });
 
+/**
+ * 위젯 세션 발급 — **origin 검증이 실제로 이뤄지는 유일한 지점.**
+ *
+ * 이 요청은 iframe 이 아니라 **몰 페이지의 codipop.js** 가 보냅니다. 그래서
+ * 브라우저가 붙이는 Origin 이 진짜 몰 주소이고, 페이지 자바스크립트가 이 값을
+ * 위조할 수 없습니다. 여기서 한 번 검사하고, 결과를 서명해 iframe 으로 넘깁니다.
+ *
+ * /try-on 에서 다시 Origin 을 보면 안 됩니다 — 거기서는 우리 iframe 주소가 찍힙니다.
+ */
+app.post('/widget/session', (req, res) => {
+  const key = String(req.query.key || (req.body && req.body.key) || '').slice(0, 80);
+  const origin = req.headers.origin || '';
+  const tenant = getTenantByApiKey(key);
+
+  if (!tenant) {
+    return res.status(404).json({ success: false, message: '등록되지 않은 API 키입니다.' });
+  }
+  if (!isOriginAllowed(tenant, origin)) {
+    console.warn(`⚠️  세션 거부: ${tenant.mallId} <- ${origin || '(origin 없음)'}`);
+    return res.status(403).json({ success: false, message: '허용되지 않은 도메인입니다.' });
+  }
+
+  const session = issueSession(tenant.mallId);
+  // 토큰은 그 몰 전용이고 30분이면 만료된다. 중간 캐시가 남겨 두면 안 된다.
+  res.set('Cache-Control', 'no-store');
+  res.json({ success: true, token: session.token, expiresAt: session.expiresAt });
+});
+
 // 위젯 부팅용 공개 설정. dashboardToken 같은 비밀값은 절대 담지 않는다.
 app.get('/widget/config', (req, res) => {
   const tenant = getTenantByApiKey(req.query.key);
@@ -318,10 +349,18 @@ app.post('/try-on', upload.any(), async (req, res) => {
 
   // 고객사 확정. apiKey 가 있으면 그 키가 가리키는 몰을 쓰고 body 의 mallId 는 버린다.
   // (클라이언트가 보낸 mallId 를 믿으면 아무나 남의 몰 리포트를 오염시킬 수 있다.)
+  // 세션 토큰이 있으면 **origin 은 이미 /widget/session 에서 검증된 것**이다.
+  // 여기서 req.headers.origin 을 보면 우리 iframe 주소라 아무 의미가 없다.
+  // 토큰의 몰과 키의 몰이 같을 때만 인정한다 — 남의 몰 토큰을 가져다 쓰지 못하게.
+  const session = verifySession(req.body?.sessionToken);
+  const keyTenant = req.body?.apiKey ? getTenantByApiKey(req.body.apiKey) : null;
+  const originVerified = Boolean(session && keyTenant && session.mallId === keyTenant.mallId);
+
   const auth = resolveRequestTenant({
     apiKey: req.body?.apiKey,
     mallId: req.body?.mallId,
     origin: req.headers.origin,
+    originVerified,
   });
   if (!auth.ok) {
     console.warn(`[${requestId}] 인증 거부: ${auth.code}`);
@@ -802,10 +841,19 @@ app.post('/get-recommendation', async (req, res) => {
 // 위젯 상호작용 / 구매 클릭 수집
 // 피팅 이벤트와 이어 붙여 "피팅 후 구매 전환율"을 계산하는 분자가 된다.
 app.post('/events', async (req, res) => {
+  // /try-on 과 같은 이유로 세션 토큰을 먼저 본다. 이 요청도 iframe 에서 나가므로
+  // req.headers.origin 은 우리 서버 주소다. 여기를 빠뜨리면 origins 를 조이는 순간
+  // **전환율 데이터가 통째로 끊긴다** — 그게 곧 과금 근거다.
+  const eventSession = verifySession(req.body?.sessionToken);
+  const eventKeyTenant = req.body?.apiKey ? getTenantByApiKey(req.body.apiKey) : null;
+
   const auth = resolveRequestTenant({
     apiKey: req.body?.apiKey,
     mallId: req.body?.mallId,
     origin: req.headers.origin,
+    originVerified: Boolean(
+      eventSession && eventKeyTenant && eventSession.mallId === eventKeyTenant.mallId,
+    ),
   });
   if (!auth.ok) {
     return res.status(401).json({ success: false, message: auth.message });

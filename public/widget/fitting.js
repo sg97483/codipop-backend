@@ -24,6 +24,9 @@
     buyUrl: params.get('buy') || '',
     category: params.get('category') || '',
     productSize: params.get('sizes') || '',
+    // 부모(몰) 페이지에서 발급받아 넘어온 세션 토큰. 서버는 이 토큰으로
+    // "이 요청이 허용된 도메인에서 시작됐다"를 판정한다. 없으면 옛 경로로 처리된다.
+    sessionToken: params.get('st') || '',
   };
 
   // 세션 ID — 방문자 1명을 세는 단위. 리포트의 "1인당 평균 피팅"이 여기서 나온다.
@@ -71,6 +74,8 @@
         sessionId: SESSION_ID,
         productId: CTX.productId,
         productName: CTX.productName,
+        // /try-on 과 같은 토큰. 없으면 origins 를 조였을 때 이벤트가 401 로 버려진다.
+        sessionToken: CTX.sessionToken,
       },
       extra || {},
     );
@@ -241,6 +246,8 @@
         form.append('weightKg', String(body.weightKg));
         form.append('usualSize', body.usualSize);
       }
+
+      if (CTX.sessionToken) form.append('sessionToken', CTX.sessionToken);
 
       sendEvent('fitting_start');
 

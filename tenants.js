@@ -169,7 +169,7 @@ function isOriginAllowed(tenant, origin) {
  *   3) apiKey 없음         → 레거시 경로. B2C 앱과 기존 데모가 여기로 온다.
  *                            등급은 tiers.js 의 TENANT_TIERS 매핑을 그대로 따른다.
  */
-function resolveRequestTenant({ apiKey, mallId, origin } = {}) {
+function resolveRequestTenant({ apiKey, mallId, origin, originVerified } = {}) {
   const key = safeStr(apiKey, 80);
 
   if (key) {
@@ -177,7 +177,10 @@ function resolveRequestTenant({ apiKey, mallId, origin } = {}) {
     if (!tenant) {
       return { ok: false, code: 'UNKNOWN_KEY', message: '등록되지 않은 API 키입니다.' };
     }
-    if (!isOriginAllowed(tenant, origin)) {
+    // originVerified 는 /widget/session 에서 **몰 페이지가 직접 보낸 요청**의
+    // Origin 을 이미 검사했다는 뜻이다. 그 경우 여기서 다시 보면 안 된다 —
+    // /try-on 은 우리 iframe 에서 나가므로 Origin 이 우리 서버 주소로 찍힌다.
+    if (!originVerified && !isOriginAllowed(tenant, origin)) {
       console.warn(`⚠️  origin 차단: ${tenant.mallId} <- ${origin}`);
       return { ok: false, code: 'ORIGIN_NOT_ALLOWED', message: '허용되지 않은 도메인입니다.' };
     }
