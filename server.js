@@ -255,7 +255,10 @@ app.get('/invite', (req, res) => {
 
 app.get('/app-ads.txt', (req, res) => {
   res.type('text/plain');
-  res.send('google.com, pub-6990308526694074, DIRECT, f08c47fec0942fa0\n');
+  res.send(
+    'google.com, pub-6990308526694074, DIRECT, f08c47fec0942fa0\n' +
+    'google.com, pub-6910461147806230, DIRECT, f08c47fec0942fa0\n'
+  );
 });
 
 // 파일럿 몰 제휴용 데모 (외부 공유 URL)
